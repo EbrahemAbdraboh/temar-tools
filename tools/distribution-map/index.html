@@ -92,11 +92,27 @@ function renderTripSummary(){
  const locked=!!tripStart||routePhase==='return';
  el.innerHTML=`<div class="trip-summary"><div class="trip-summary-title">${tr('routeReady')}</div><div class="trip-stats"><div class="trip-stat"><strong>${branches.length}</strong><span>${tr('branchesCount')}</span></div><div class="trip-stat"><strong>${d} <small>${tr('km')}</small></strong><span>${tr('totalDistance')}</span></div></div><div class="route-state">${routePhase==='outbound'?tr('routeOutbound'):routePhase==='return'?tr('returnShown'):tr('statusPlanned')}</div>${!locked?`<div class="actions" style="margin-top:10px"><button type="button" class="btn secondary" id="editTripBtn"><i class="fa-solid fa-pen-to-square"></i><span>${editMode?tr('applyEdit'):tr('edit')}</span></button></div>`:''}</div>`;
  const btn=document.getElementById('editTripBtn');
- if(btn&&!locked)btn.onclick=async()=>{
-  if(!editMode){editMode=true;renderBranches();renderTripSummary();updateStatus();toast(tr('editHint'));return}
-  if(!selected.length){toast(tr('choose'));return}
-  editMode=false;await applyBranchEdit([...selected]);
- };
+ if(btn&&!locked){
+  btn.onclick=null;
+  btn.addEventListener('click',handleEditTrip,{once:true});
+ }
+}
+async function handleEditTrip(){
+ const btn=document.getElementById('editTripBtn');
+ if(!btn)return;
+ if(tripStart||routePhase==='return'){toast(tr('editLocked'));return}
+ if(!editMode){
+  editMode=true;
+  renderBranches();
+  renderTripSummary();
+  updateStatus();
+  toast(tr('editHint'));
+  return;
+ }
+ if(!selected.length){toast(tr('choose'));return}
+ editMode=false;
+ await applyBranchEdit([...selected]);
+}
 }
 const ROUTING_ENGINES=[
  'https://routing.openstreetmap.de/routed-car/route/v1/driving/',
@@ -229,10 +245,31 @@ function resetAll(){
  stopLocationWatch();
  tripSessionId++;
  editMode=false;
- selected=[];clearLayers();routeCoords=[];routeIndex=0;tripStart=null;tripArrivals=[];routeOrder=[];routePhase='none';
- outboundDistanceKm=0;returnDistanceKm=0;totalTripDistanceKm=0;waitingForArrival=false;arrivalPrompted=false;stopIndexes=[];
+ selected=[];
+ clearLayers();
+ routeCoords=[];
+ routeIndex=0;
+ tripStart=null;
+ tripArrivals=[];
+ routeOrder=[];
+ routePhase='none';
+ outboundDistanceKm=0;
+ returnDistanceKm=0;
+ totalTripDistanceKm=0;
+ waitingForArrival=false;
+ arrivalPrompted=false;
+ stopIndexes=[];
  lastKnownPosition=null;
- syncSelectedBranchMarkers();renderBranches();fitAll();updateStatus();renderTripSummary();
+ if(document.getElementById('planBtn')){
+  document.getElementById('planBtn').disabled=false;
+  document.getElementById('planBtn').dataset.busy='';
+  document.getElementById('planBtn').classList.remove('route-active');
+ }
+ syncSelectedBranchMarkers();
+ renderBranches();
+ renderTripSummary();
+ updateStatus();
+ if(map)fitAll();
  toast(lang==='ar'?'تمت إعادة الضبط.':'Reset complete.');
 }
 async function applyBranchEdit(nextSelected){
@@ -288,7 +325,8 @@ function stopLocationWatch(){if(locationWatchId!==null&&navigator.geolocation){n
 function clearHistory(){openModal(tr('clear'),tr('clearConfirm'),()=>{localStorage.removeItem('temar_trips');renderHistory();toast(tr('historyClear'))})}
 function homeNavigation(){openModal(tr('confirmHome'),tr('homeWarn'),()=>{resetAll();const home=document.body.dataset.home||'../../index.html';window.location.href=new URL(home,window.location.href).href;});}
 document.getElementById('planBtn').onclick=planRoute;
-document.getElementById('resetBtn').onclick=resetAll;
+document.getElementById('resetBtn').onclick=null;
+document.getElementById('resetBtn').addEventListener('click',resetAll);
 document.getElementById('simBtn').onclick=startSim;
 document.getElementById('clearHistory').onclick=clearHistory;
 document.getElementById('langBtn').onclick=()=>{lang=lang==='ar'?'en':'ar';localStorage.setItem('temar_lang',lang);applyLang()};

@@ -15,7 +15,7 @@ header{height:68px;background:#fff;border-bottom:1px solid var(--line);display:f
 .lang{border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:10px;padding:8px 11px;font-weight:800}
 main{max-width:1500px;margin:auto;padding:18px} .grid{display:grid;grid-template-columns:360px 1fr;gap:16px} .panel,.map-wrap,.history{background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 8px 30px #07305b0b}
 .panel{padding:16px} h1{font-size:22px;margin:0 0 5px;color:var(--navy)} .sub{color:var(--muted);font-size:13px;margin-bottom:15px}
-.branch{display:flex;align-items:center;gap:11px;padding:11px;border:1px solid var(--line);border-radius:13px;margin:8px 0;background:#fff;transition:.2s} .branch:hover{border-color:#a9c8e8;box-shadow:0 5px 18px #1267c412} .branch input{width:18px;height:18px;accent-color:var(--navy)} .pin-mini{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#eaf3ff;color:var(--blue)} .branch-name{font-weight:850} .meta{font-size:11px;color:var(--muted)} .trip-summary{margin-top:12px;padding:13px;border:1px solid #dce7f2;border-radius:14px;background:linear-gradient(180deg,#f9fbfd,#f2f7fb)} .trip-summary-title{font-weight:900;color:var(--navy);margin-bottom:10px}.trip-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}.trip-stat{background:#fff;border:1px solid var(--line);border-radius:11px;padding:10px}.trip-stat strong{display:block;font-size:20px;color:var(--navy)}.trip-stat span{font-size:11px;color:var(--muted)} .edit-list{margin-top:9px;display:grid;gap:6px}.edit-row{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 9px}.edit-row span{font-weight:750;font-size:12px}.remove-branch{background:#fff0f0;color:var(--danger);border:1px solid #f2cccc;border-radius:8px;padding:6px 8px}.route-state{margin-top:8px;font-size:11px;color:var(--muted)}
+.branch{display:flex;align-items:center;gap:11px;padding:11px;border:1px solid var(--line);border-radius:13px;margin:8px 0;background:#fff;transition:.2s} .branch:hover{border-color:#a9c8e8;box-shadow:0 5px 18px #1267c412}.branch.editing{border-color:#1267c4;background:#f4f9ff;box-shadow:0 5px 18px #1267c412}.branch.editing input{transform:scale(1.12)} .branch input{width:18px;height:18px;accent-color:var(--navy)} .pin-mini{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#eaf3ff;color:var(--blue)} .branch-name{font-weight:850} .meta{font-size:11px;color:var(--muted)} .trip-summary{margin-top:12px;padding:13px;border:1px solid #dce7f2;border-radius:14px;background:linear-gradient(180deg,#f9fbfd,#f2f7fb)} .trip-summary-title{font-weight:900;color:var(--navy);margin-bottom:10px}.trip-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}.trip-stat{background:#fff;border:1px solid var(--line);border-radius:11px;padding:10px}.trip-stat strong{display:block;font-size:20px;color:var(--navy)}.trip-stat span{font-size:11px;color:var(--muted)} .edit-list{margin-top:9px;display:grid;gap:6px}.edit-row{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 9px}.edit-row span{font-weight:750;font-size:12px}.remove-branch{background:#fff0f0;color:var(--danger);border:1px solid #f2cccc;border-radius:8px;padding:6px 8px}.route-state{margin-top:8px;font-size:11px;color:var(--muted)}
 .actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px} .status{margin-top:12px;padding:11px;border-radius:12px;background:#f4f8fc;color:#42566d;font-size:13px;line-height:1.6}
 .map-wrap{overflow:hidden;position:relative} #map{height:650px;min-height:520px} .map-badge{position:absolute;z-index:500;top:12px;right:12px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px 11px;font-size:12px;font-weight:800;box-shadow:0 4px 16px #0002}
 .legend{position:absolute;z-index:500;bottom:12px;left:12px;background:#fff;border:1px solid var(--line);border-radius:13px;padding:10px;box-shadow:0 4px 16px #0002;font-size:12px} .legend div{display:flex;gap:8px;align-items:center;margin:5px 0} .legend .dot{width:20px;text-align:center}
@@ -62,33 +62,49 @@ function applyLang(){document.documentElement.lang=lang;document.documentElement
 function branchIcon(i){return L.divIcon({className:'',html:`<div class="branch-marker"><i class="fa-solid fa-location-dot"></i><b>${i+1}</b></div>`,iconSize:[46,56],iconAnchor:[23,54],popupAnchor:[0,-54]})}
 function factoryIcon(){return L.divIcon({className:'',html:`<div class="factory-marker"><img src="${logo}" alt="TEMAR"></div>`,iconSize:[48,48],iconAnchor:[24,24]})}
 function truckIcon(){return L.divIcon({className:'',html:`<div class="truck-marker"><i class="fa-solid fa-truck"></i><span class="snow"><i class="fa-solid fa-snowflake"></i></span></div>`,iconSize:[58,46],iconAnchor:[29,23]})}
-function initMap(){map=L.map('map',{zoomControl:false}).setView([points.factory.lat,points.factory.lng],10);L.control.zoom({position:'topleft'}).addTo(map);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);markers.factory=L.marker([points.factory.lat,points.factory.lng],{icon:factoryIcon(),zIndexOffset:800}).addTo(map).bindPopup(`<div class="popup-title">${points.factory.nameAr}</div><div class="popup-meta">TEMAR • Start / End</div>`);syncSelectedBranchMarkers();fitAll()}
+function initMap(){map=L.map('map',{zoomControl:false}).setView([points.factory.lat,points.factory.lng],10);routeOverlayGroup=L.layerGroup().addTo(map);L.control.zoom({position:'topleft'}).addTo(map);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);markers.factory=L.marker([points.factory.lat,points.factory.lng],{icon:factoryIcon(),zIndexOffset:800}).addTo(map).bindPopup(`<div class="popup-title">${points.factory.nameAr}</div><div class="popup-meta">TEMAR • Start / End</div>`);syncSelectedBranchMarkers();fitAll()}
 function syncSelectedBranchMarkers(){if(!map)return;points.branches.forEach((b,i)=>{const shouldShow=selected.includes(b.id);if(shouldShow&&!markers[b.id]){markers[b.id]=L.marker([b.lat,b.lng],{icon:branchIcon(i),zIndexOffset:500}).addTo(map).bindPopup(`<div class="popup-title">${b.nameAr}</div><div class="popup-meta">${lang==='ar'?'فرع مختار للرحلة':'Selected trip branch'}</div>`);}else if(!shouldShow&&markers[b.id]){map.removeLayer(markers[b.id]);delete markers[b.id];}})}
 function fitAll(){const visible=points.branches.filter(b=>selected.includes(b.id));const ll=[L.latLng(points.factory.lat,points.factory.lng),...visible.map(b=>L.latLng(b.lat,b.lng))];map.fitBounds(L.latLngBounds(ll),{padding:[45,45],maxZoom:14})}
-function renderBranches(){const el=document.getElementById('branches');el.innerHTML='';const locked=!!routeOrder.length;points.branches.forEach(b=>{const checked=selected.includes(b.id);el.insertAdjacentHTML('beforeend',`<label class="branch"><input type="checkbox" data-id="${b.id}" ${checked?'checked':''} ${locked?'disabled':''}><span class="pin-mini"><i class="fa-solid fa-location-dot"></i></span><span><span class="branch-name">${lang==='ar'?b.nameAr:b.nameEn}</span></span></label>`);});el.querySelectorAll('input').forEach(x=>x.addEventListener('change',()=>{selected=[...el.querySelectorAll('input:checked')].map(i=>i.dataset.id);syncSelectedBranchMarkers();fitAll();updateStatus();}));}
+function renderBranches(){
+ const el=document.getElementById('branches');
+ el.innerHTML='';
+ const locked=!!tripStart||routePhase==='return';
+ points.branches.forEach(b=>{
+  const checked=selected.includes(b.id);
+  el.insertAdjacentHTML('beforeend',`<label class="branch ${editMode?'editing':''}">
+   <input type="checkbox" data-id="${b.id}" ${checked?'checked':''} ${locked?'disabled':''}>
+   <span class="pin-mini"><i class="fa-solid fa-location-dot"></i></span>
+   <span><span class="branch-name">${lang==='ar'?b.nameAr:b.nameEn}</span><span class="meta">${editMode&&!locked?(lang==='ar'?'اضغط لإضافة أو إزالة الفرع':'Tap to add or remove'):''}</span></span>
+  </label>`);
+ });
+ el.querySelectorAll('input').forEach(x=>x.addEventListener('change',()=>{
+  if(!editMode && routeOrder.length){x.checked=selected.includes(x.dataset.id);return}
+  selected=[...el.querySelectorAll('input:checked')].map(i=>i.dataset.id);
+  syncSelectedBranchMarkers();fitAll();updateStatus();
+ }));
+}
 function updateStatus(){const el=document.getElementById('status');if(locationWatchId!==null){el.innerHTML=`<i class="fa-solid fa-location-dot"></i> ${tr('statusGps')}`;return}if(tripStart){el.innerHTML=lang==='ar'?`الرحلة قيد التشغيل — تم تأكيد <b>${tripArrivals.length}</b> من <b>${routeOrder.filter(x=>x.id!=='factory').length}</b> فروع.`:`Trip in progress — <b>${tripArrivals.length}</b> of <b>${routeOrder.filter(x=>x.id!=='factory').length}</b> branches confirmed.`;return}el.innerHTML=lang==='ar'?`تم اختيار <b>${selected.length}</b> من 3 فروع.`:`<b>${selected.length}</b> of 3 branches selected.`}
-function renderTripSummary(){const el=document.getElementById('tripSummary');if(!routeOrder.length){el.innerHTML='';return}const branches=routeOrder.filter(x=>x.id!=='factory');const d=(totalTripDistanceKm||0).toFixed(1);const locked=!!tripStart||routePhase==='return';el.innerHTML=`<div class="trip-summary"><div class="trip-summary-title">${tr('routeReady')}</div><div class="trip-stats"><div class="trip-stat"><strong>${branches.length}</strong><span>${tr('branchesCount')}</span></div><div class="trip-stat"><strong>${d} <small>${tr('km')}</small></strong><span>${tr('totalDistance')}</span></div></div><div class="route-state">${routePhase==='outbound'?tr('routeOutbound'):routePhase==='return'?tr('returnShown'):tr('statusPlanned')}</div><div class="actions" style="margin-top:10px"><button class="btn secondary" id="editTripBtn" ${locked?'disabled':''}><i class="fa-solid fa-pen-to-square"></i><span>${tr('edit')}</span></button></div><div id="editList" class="edit-list" style="display:none"><div class="meta">${tr('editHint')}</div>${branches.map(b=>`<div class="edit-row"><span>${lang==='ar'?b.nameAr:b.nameEn}</span><button type="button" class="remove-branch" data-remove="${b.id}" onclick="removeBranchFromTrip(\'${b.id}\')"><i class="fa-solid fa-xmark"></i> ${tr('remove')}</button></div>`).join('')}</div></div>`;const btn=document.getElementById('editTripBtn');
-if(btn&&!locked){
- btn.onclick=()=>{
-  const l=document.getElementById('editList');
-  l.style.display=l.style.display==='none'?'grid':'none';
+function renderTripSummary(){
+ const el=document.getElementById('tripSummary');
+ if(!routeOrder.length){el.innerHTML='';editMode=false;renderBranches();return}
+ const branches=routeOrder.filter(x=>x.id!=='factory');
+ const d=(totalTripDistanceKm||0).toFixed(1);
+ const locked=!!tripStart||routePhase==='return';
+ el.innerHTML=`<div class="trip-summary"><div class="trip-summary-title">${tr('routeReady')}</div><div class="trip-stats"><div class="trip-stat"><strong>${branches.length}</strong><span>${tr('branchesCount')}</span></div><div class="trip-stat"><strong>${d} <small>${tr('km')}</small></strong><span>${tr('totalDistance')}</span></div></div><div class="route-state">${routePhase==='outbound'?tr('routeOutbound'):routePhase==='return'?tr('returnShown'):tr('statusPlanned')}</div>${!locked?`<div class="actions" style="margin-top:10px"><button type="button" class="btn secondary" id="editTripBtn"><i class="fa-solid fa-pen-to-square"></i><span>${editMode?tr('applyEdit'):tr('edit')}</span></button></div>`:''}</div>`;
+ const btn=document.getElementById('editTripBtn');
+ if(btn&&!locked)btn.onclick=async()=>{
+  if(!editMode){editMode=true;renderBranches();renderTripSummary();updateStatus();toast(tr('editHint'));return}
+  if(!selected.length){toast(tr('choose'));return}
+  editMode=false;await applyBranchEdit([...selected]);
  };
- const list=document.getElementById('editList');
- if(list)list.onclick=(ev)=>{
-  const remove=ev.target.closest('.remove-branch');
-  if(!remove)return;
-  ev.preventDefault();
-  ev.stopPropagation();
-  removeBranchFromTrip(remove.dataset.remove);
- };
-}}
+}
 const ROUTING_ENGINES=[
  'https://routing.openstreetmap.de/routed-car/route/v1/driving/',
  'https://router.project-osrm.org/route/v1/driving/'
 ];
 async function fetchWithTimeout(url,ms=12000){const c=new AbortController();const t=setTimeout(()=>c.abort(),ms);try{const r=await fetch(url,{method:'GET',headers:{'Accept':'application/json'},mode:'cors',signal:c.signal,cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const d=await r.json();if(d.code!=='Ok'||!d.routes?.[0])throw new Error(d.message||d.code||'routing');return d}finally{clearTimeout(t)}}
 async function getRoute(coords){let lastErr=null;const path=coords.map(p=>encodeURIComponent(p.lng+','+p.lat)).join(';');for(const base of ROUTING_ENGINES){try{const d=await fetchWithTimeout(base+path+'?overview=full&geometries=geojson&steps=false');return {geometry:d.routes[0].geometry,distanceKm:d.routes[0].distance/1000,durationMin:d.routes[0].duration/60,engine:base.includes('openstreetmap.de')?'OSM Router':'OSRM Demo'};}catch(e){lastErr=e}}throw lastErr||new Error('routing')}
-function clearLayers(){if(routeLayer){map.removeLayer(routeLayer);routeLayer=null}if(returnLayer){map.removeLayer(returnLayer);returnLayer=null}if(truckMarker){map.removeLayer(truckMarker);truckMarker=null}}
+function clearLayers(){if(routeOverlayGroup)routeOverlayGroup.clearLayers();if(routeLayer){map.removeLayer(routeLayer);routeLayer=null}if(returnLayer){map.removeLayer(returnLayer);returnLayer=null}if(truckMarker){map.removeLayer(truckMarker);truckMarker=null}}
 async function planRoute(){
  const session=tripSessionId;
  if(tripStart){toast(tr('editLocked'));return}
@@ -198,7 +214,7 @@ async function planRoute(){
   console.error('planRoute failed:',e);
   toast((tr('routingFail'))+' '+(e?.message||''));
  }finally{
-  if(btn){
+  if(btn&&session===tripSessionId){
    btn.disabled=false;
    btn.dataset.busy='';
    btn.classList.toggle('route-active',!!routeLayer&&routePhase==='outbound');
@@ -212,26 +228,26 @@ let tripSessionId=0;
 function resetAll(){
  stopLocationWatch();
  tripSessionId++;
+ editMode=false;
  selected=[];clearLayers();routeCoords=[];routeIndex=0;tripStart=null;tripArrivals=[];routeOrder=[];routePhase='none';
  outboundDistanceKm=0;returnDistanceKm=0;totalTripDistanceKm=0;waitingForArrival=false;arrivalPrompted=false;stopIndexes=[];
  lastKnownPosition=null;
  syncSelectedBranchMarkers();renderBranches();fitAll();updateStatus();renderTripSummary();
  toast(lang==='ar'?'تمت إعادة الضبط.':'Reset complete.');
 }
-async function removeBranchFromTrip(id){
+async function applyBranchEdit(nextSelected){
  if(tripStart||routePhase==='return'){toast(tr('editLocked'));return}
  tripSessionId++;
- const remaining=routeOrder.filter(x=>x.id==='factory'||x.id!==id);
- if(!remaining.filter(x=>x.id!=='factory').length){clearLayers();selected=[];routeOrder=[];routeCoords=[];stopIndexes=[];routePhase='none';outboundDistanceKm=0;returnDistanceKm=0;totalTripDistanceKm=0;syncSelectedBranchMarkers();renderBranches();fitAll();updateStatus();renderTripSummary();toast(tr('noBranchesAfterEdit'));return}
- selected=remaining.filter(x=>x.id!=='factory').map(x=>x.id);
- clearLayers();
- routeOrder=[]; routeCoords=[]; stopIndexes=[]; routePhase='none';
- outboundDistanceKm=0; returnDistanceKm=0; totalTripDistanceKm=0;
- syncSelectedBranchMarkers(); renderBranches(); fitAll(); renderTripSummary(); updateStatus();
+ const normalized=[...new Set(nextSelected)].filter(id=>points.branches.some(b=>b.id===id));
+ if(!normalized.length){toast(tr('choose'));editMode=true;renderBranches();renderTripSummary();return}
+ selected=normalized;clearLayers();
+ routeOrder=[];routeCoords=[];stopIndexes=[];routePhase='none';
+ outboundDistanceKm=0;returnDistanceKm=0;totalTripDistanceKm=0;
+ syncSelectedBranchMarkers();renderBranches();fitAll();updateStatus();renderTripSummary();
  await planRoute();
- toast(tr('updated'));
+ if(routeOrder.length)toast(tr('updated'));
 }
-function startSim(){if(!routeCoords.length||routePhase!=='outbound'){toast(lang==='ar'?'حدد مسار الذهاب أولًا.':'Plan the outbound route first.');return}if(tripStart){return}tripStart=new Date();tripArrivals=[];routeIndex=0;waitingForArrival=false;if(truckMarker)map.removeLayer(truckMarker);truckMarker=L.marker(routeCoords[0],{icon:truckIcon(),zIndexOffset:1500}).addTo(map);updateStatus();toast(tr('simStart'));stepVehicle()}
+function startSim(){if(!routeCoords.length||routePhase!=='outbound'){toast(lang==='ar'?'حدد مسار الذهاب أولًا.':'Plan the outbound route first.');return}if(tripStart){return}tripStart=new Date();tripArrivals=[];routeIndex=0;waitingForArrival=false;if(truckMarker)map.removeLayer(truckMarker);truckMarker=L.marker(routeCoords[0],{icon:truckIcon(),zIndexOffset:1500}).addTo(routeOverlayGroup);updateStatus();toast(tr('simStart'));stepVehicle()}
 function stepVehicle(){if(!truckMarker||routeIndex>=routeCoords.length-1||waitingForArrival)return;routeIndex++;truckMarker.setLatLng(routeCoords[routeIndex]);const next=routeOrder.find(x=>x.id!=='factory'&&!tripArrivals.some(a=>a.id===x.id));const stop=next?stopIndexes.find(s=>s.id===next.id):null;if(next&&stop&&routeIndex>=stop.index&&!arrivalPrompted){arrivalPrompted=true;waitingForArrival=true;showArrival(next);return}setTimeout(stepVehicle,80)}
 function distPoint(point,latlng){return dist(point,{lat:latlng[0],lng:latlng[1]})}
 function showArrival(branch){openModal(tr('confirm'),`${tr('arrive')} <b>${lang==='ar'?branch.nameAr:branch.nameEn}</b><br>${tr('arrivalAsk')}`,()=>{if(tripArrivals.some(a=>a.id===branch.id))return;tripArrivals.push({id:branch.id,time:new Date().toISOString()});arrivalPrompted=false;waitingForArrival=false;updateStatus();renderTripSummary();if(tripArrivals.length===routeOrder.filter(x=>x.id!=='factory').length){finishTrip();return}setTimeout(stepVehicle,100)})}
@@ -247,7 +263,7 @@ async function finishTrip(){
   returnDistanceKm=ret.distanceKm;
   totalTripDistanceKm=outboundDistanceKm+returnDistanceKm;
   if(returnLayer)map.removeLayer(returnLayer);
-  returnLayer=L.geoJSON(ret.geometry,{style:{color:'#F58112',weight:6,opacity:.92,dashArray:'10 8'}}).addTo(map);
+  returnLayer=L.geoJSON(ret.geometry,{style:{color:'#F58112',weight:6,opacity:.92,dashArray:'10 8'}}).addTo(routeOverlayGroup);
   routePhase='return';
   if(truckMarker)truckMarker.setLatLng([points.factory.lat,points.factory.lng]);
   map.fitBounds(L.featureGroup([routeLayer,returnLayer]).getBounds(),{padding:[40,40]});
@@ -266,7 +282,7 @@ function viewTrip(i){const h=JSON.parse(localStorage.getItem('temar_trips')||'[]
 function openModal(title,text,ok,opts={}){const modal=document.getElementById('modal'),titleEl=document.getElementById('modalTitle'),textEl=document.getElementById('modalText'),okBtn=document.getElementById('modalOk'),cancelBtn=document.getElementById('modalCancel');titleEl.textContent=title;textEl.innerHTML=text||'';modal.style.display='flex';okBtn.style.display=opts.hideOk?'none':'inline-flex';okBtn.textContent=opts.okText||tr('confirm');cancelBtn.textContent=opts.cancelText||tr('cancel');cancelBtn.style.display='inline-flex';okBtn.onclick=null;cancelBtn.onclick=null;okBtn.onclick=()=>{modal.style.display='none';if(typeof ok==='function')ok()};cancelBtn.onclick=()=>{modal.style.display='none'}}
 function requestLocationPermission(){openModal(tr('permissionTitle'),`${tr('permissionText')}<ul class="permission-list"><li>${tr('permissionSteps')}</li><li>${tr('secureRequired')}</li></ul><div class="permission-state"><i class="fa-solid fa-shield-halved"></i><span>${tr('locationStatus')}</span></div>`,()=>startLiveLocation(),{okText:tr('permissionContinue'),cancelText:tr('permissionCancel')})}
 async function startLiveLocation(){if(!window.isSecureContext&&!['localhost','127.0.0.1'].includes(location.hostname)){toast(tr('secureRequired'));return}if(!navigator.geolocation){toast(tr('gpsFail'));return}try{if(navigator.permissions&&navigator.permissions.query){const perm=await navigator.permissions.query({name:'geolocation'});if(perm.state==='denied'){openModal(tr('permissionDeniedTitle'),tr('permissionDeniedText'),null,{hideOk:true,okText:tr('close'),cancelText:tr('close')});return}if(perm.state==='prompt')toast(tr('permissionPrompt'));}stopLocationWatch();locationWatchId=navigator.geolocation.watchPosition(onLocationSuccess,onLocationError,{enableHighAccuracy:true,timeout:15000,maximumAge:3000});updateStatus()}catch(e){toast(tr('gpsFail'))}}
-function onLocationSuccess(pos){lastKnownPosition=pos;const p=[pos.coords.latitude,pos.coords.longitude];if(truckMarker)truckMarker.setLatLng(p);else truckMarker=L.marker(p,{icon:truckIcon(),zIndexOffset:1500}).addTo(map);if(tripStart&&routePhase==='outbound'&&!waitingForArrival){const next=routeOrder.find(x=>x.id!=='factory'&&!tripArrivals.some(a=>a.id===x.id));if(next&&distPoint(next,p)<0.25&&!arrivalPrompted){arrivalPrompted=true;waitingForArrival=true;showArrival(next)}}toast(tr('gpsOk'));updateStatus()}
+function onLocationSuccess(pos){lastKnownPosition=pos;const p=[pos.coords.latitude,pos.coords.longitude];if(truckMarker)truckMarker.setLatLng(p);else truckMarker=L.marker(p,{icon:truckIcon(),zIndexOffset:1500}).addTo(routeOverlayGroup);if(tripStart&&routePhase==='outbound'&&!waitingForArrival){const next=routeOrder.find(x=>x.id!=='factory'&&!tripArrivals.some(a=>a.id===x.id));if(next&&distPoint(next,p)<0.25&&!arrivalPrompted){arrivalPrompted=true;waitingForArrival=true;showArrival(next)}}toast(tr('gpsOk'));updateStatus()}
 function onLocationError(err){stopLocationWatch();if(err&&err.code===1){toast(tr('gpsDenied'))}else if(err&&err.code===2){toast(tr('gpsUnavailable'))}else{toast(tr('gpsFail'))}updateStatus()}
 function stopLocationWatch(){if(locationWatchId!==null&&navigator.geolocation){navigator.geolocation.clearWatch(locationWatchId)}locationWatchId=null}
 function clearHistory(){openModal(tr('clear'),tr('clearConfirm'),()=>{localStorage.removeItem('temar_trips');renderHistory();toast(tr('historyClear'))})}

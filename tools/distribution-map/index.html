@@ -99,7 +99,8 @@ function renderTripSummary(){
  const branches=routeOrder.filter(x=>x.id!=='factory');
  const d=(totalTripDistanceKm||0).toFixed(1);
  const locked=!!tripStart||routePhase==='return';
- el.innerHTML=`<div class="trip-summary"><div class="trip-summary-title">${tr('routeReady')}</div><div class="trip-stats"><div class="trip-stat"><strong>${branches.length}</strong><span>${tr('branchesCount')}</span></div><div class="trip-stat"><strong>${d} <small>${tr('km')}</small></strong><span>${tr('totalDistance')}</span></div></div><div class="route-state">${routePhase==='outbound'?tr('routeOutbound'):routePhase==='return'?tr('returnShown'):tr('statusPlanned')}</div>${!locked?`<div class="actions" style="margin-top:10px"><button type="button" class="btn secondary" id="editTripBtn"><i class="fa-solid ${editMode?'fa-check':'fa-pen-to-square'}"></i><span>${editMode?tr('applyEdit'):tr('edit')}</span></button></div>`:''}</div>`;
+ const editAvailable=routePhase==='outbound';
+ el.innerHTML=`<div class="trip-summary"><div class="trip-summary-title">${tr('routeReady')}</div><div class="trip-stats"><div class="trip-stat"><strong>${branches.length}</strong><span>${tr('branchesCount')}</span></div><div class="trip-stat"><strong>${d} <small>${tr('km')}</small></strong><span>${tr('totalDistance')}</span></div></div><div class="route-state">${routePhase==='outbound'?tr('routeOutbound'):routePhase==='return'?tr('returnShown'):tr('statusPlanned')}</div>${editAvailable?`<div class="actions" style="margin-top:10px"><button type="button" class="btn secondary" id="editTripBtn" ${locked?'disabled title="'+tr('editLocked')+'"':''}><i class="fa-solid ${editMode?'fa-check':'fa-pen-to-square'}"></i><span>${editMode?tr('applyEdit'):tr('edit')}</span></button></div>`:''}</div>`;
  const btn=document.getElementById('editTripBtn');
  if(btn&&!locked) btn.onclick=handleEditTrip;
 }
@@ -315,7 +316,50 @@ function getActiveTrip(){try{return JSON.parse(localStorage.getItem(ACTIVE_TRIP_
 function clearActiveTrip(){localStorage.removeItem(ACTIVE_TRIP_KEY)}
 function persistActiveTrip(){if(!routeOrder.length)return;const status=routePhase==='return'?'completed':tripStart?'in_progress':'planned';const payload={version:1,tripId:tripSessionId,status,selected:[...selected],routeOrder:routeOrder.map(x=>x.id),routeCoords:[...routeCoords],stopIndexes:[...stopIndexes],routeGeometry,returnGeometry,outboundDistanceKm,returnDistanceKm,totalTripDistanceKm,routePhase,routeIndex,tripStart:tripStart?tripStart.toISOString():null,tripArrivals:[...tripArrivals],lastKnownPosition:lastKnownPosition?{lat:lastKnownPosition.coords?lastKnownPosition.coords.latitude:lastKnownPosition.lat,lng:lastKnownPosition.coords?lastKnownPosition.coords.longitude:lastKnownPosition.lng}:null,savedAt:new Date().toISOString()};localStorage.setItem(ACTIVE_TRIP_KEY,JSON.stringify(payload))}
 function rebuildRouteOrder(ids){return(ids||[]).map(id=>id==='factory'?points.factory:points.branches.find(b=>b.id===id)).filter(Boolean)}
-function restoreActiveTrip(saved){if(!saved||!saved.routeOrder?.length)return false;selected=[...new Set(saved.selected||[])].filter(id=>points.branches.some(b=>b.id===id));routeOrder=rebuildRouteOrder(saved.routeOrder);routeCoords=saved.routeCoords||[];stopIndexes=saved.stopIndexes||[];routeGeometry=saved.routeGeometry||null;returnGeometry=saved.returnGeometry||null;outboundDistanceKm=Number(saved.outboundDistanceKm)||0;returnDistanceKm=Number(saved.returnDistanceKm)||0;totalTripDistanceKm=Number(saved.totalTripDistanceKm)||0;routePhase=saved.routePhase||'none';routeIndex=Math.min(Number(saved.routeIndex)||0,Math.max(0,routeCoords.length-1));tripStart=saved.tripStart?new Date(saved.tripStart):null;tripArrivals=saved.tripArrivals||[];lastKnownPosition=saved.lastKnownPosition||null;tripFinishing=false;waitingForArrival=false;arrivalPrompted=false;editMode=false;setHomeNavigationLocked(false);clearLayers();if(routeGeometry)routeLayer=L.geoJSON(routeGeometry,{style:{color:'#07305B',weight:6,opacity:.88}}).addTo(map);if(returnGeometry)returnLayer=L.geoJSON(returnGeometry,{style:{color:'#F58112',weight:6,opacity:.92,dashArray:'10 8'}}).addTo(routeOverlayGroup);if(routeCoords.length&&tripStart&&routePhase==='outbound')truckMarker=L.marker(routeCoords[routeIndex],{icon:truckIcon(),zIndexOffset:1500}).addTo(routeOverlayGroup);syncSelectedBranchMarkers();renderBranches();renderTripSummary();updateStatus();const layers=[routeLayer,returnLayer].filter(Boolean);if(layers.length)map.fitBounds(L.featureGroup(layers).getBounds(),{padding:[40,40]});else fitAll();return true}
+function restoreActiveTrip(saved){
+ if(!saved||!saved.routeOrder?.length)return false;
+ selected=[...new Set(saved.selected||[])].filter(id=>points.branches.some(b=>b.id===id));
+ routeOrder=rebuildRouteOrder(saved.routeOrder);
+ routeCoords=saved.routeCoords||[];
+ stopIndexes=saved.stopIndexes||[];
+ routeGeometry=saved.routeGeometry||null;
+ returnGeometry=saved.returnGeometry||null;
+ outboundDistanceKm=Number(saved.outboundDistanceKm)||0;
+ returnDistanceKm=Number(saved.returnDistanceKm)||0;
+ totalTripDistanceKm=Number(saved.totalTripDistanceKm)||0;
+ routePhase=saved.routePhase||'none';
+ routeIndex=Math.min(Number(saved.routeIndex)||0,Math.max(0,routeCoords.length-1));
+ tripStart=saved.tripStart?new Date(saved.tripStart):null;
+ tripArrivals=saved.tripArrivals||[];
+ lastKnownPosition=saved.lastKnownPosition?{
+  lat:Number(saved.lastKnownPosition.lat),
+  lng:Number(saved.lastKnownPosition.lng),
+  source:saved.lastKnownPosition.source||'restored',
+  timestamp:saved.lastKnownPosition.timestamp||saved.savedAt||new Date().toISOString()
+ }:null;
+ tripFinishing=false;
+ waitingForArrival=false;
+ arrivalPrompted=false;
+ editMode=false;
+ setHomeNavigationLocked(false);
+ clearLayers();
+ if(routeGeometry)routeLayer=L.geoJSON(routeGeometry,{style:{color:'#07305B',weight:6,opacity:.88}}).addTo(map);
+ if(returnGeometry)returnLayer=L.geoJSON(returnGeometry,{style:{color:'#F58112',weight:6,opacity:.92,dashArray:'10 8'}}).addTo(routeOverlayGroup);
+ if(routeCoords.length&&tripStart&&routePhase==='outbound'){
+  const p=routeCoords[routeIndex];
+  truckMarker=L.marker(p,{icon:truckIcon(),zIndexOffset:1500}).addTo(routeOverlayGroup);
+ }else if(lastKnownPosition&&Number.isFinite(lastKnownPosition.lat)&&Number.isFinite(lastKnownPosition.lng)){
+  truckMarker=L.marker([lastKnownPosition.lat,lastKnownPosition.lng],{icon:truckIcon(),zIndexOffset:1500}).addTo(routeOverlayGroup);
+ }
+ syncSelectedBranchMarkers();
+ renderBranches();
+ renderTripSummary();
+ updateTripActionButton();
+ updateStatus();
+ const layers=[routeLayer,returnLayer].filter(Boolean);
+ if(layers.length)map.fitBounds(L.featureGroup(layers).getBounds(),{padding:[40,40]});else fitAll();
+ return true
+}
 function offerActiveTripChoice(){const saved=getActiveTrip();if(!saved||saved.status==='completed'){if(saved?.status==='completed')clearActiveTrip();return}const msg=tr('activeTripText')+'<br><br><b>'+(saved.status==='in_progress'?tr('activeTripInProgress'):tr('activeTripPlanned'))+'</b>';openModal(tr('activeTripTitle'),msg,()=>{if(!restoreActiveTrip(saved)){clearActiveTrip();resetAll()}else resumeActiveTrip(saved)},{okText:tr('resumeTrip'),cancelText:tr('newTrip'),onCancel:()=>{clearActiveTrip();resetAll()}})}
 function resetAll(){
  stopLocationWatch();
@@ -413,7 +457,35 @@ function stopLocationWatch(){if(locationWatchId!==null&&navigator.geolocation){n
 function clearHistory(){openModal(tr('clear'),tr('clearConfirm'),()=>{localStorage.removeItem('temar_trips');renderHistory();toast(tr('historyClear'))})}
 function setHomeNavigationLocked(locked){const b=document.getElementById('homeBtn');if(!b)return;b.disabled=!!locked;b.setAttribute('aria-disabled',locked?'true':'false');b.title=locked?tr('homeBlockedArrival'):''}
 function homeNavigation(){if(waitingForArrival){toast(tr('homeBlockedArrival'));setHomeNavigationLocked(true);return}homeConfirmPending=true;persistActiveTrip();stopLocationWatch();const home=document.body.dataset.home||'../../index.html';window.location.href=new URL(home,window.location.href).href}
-async function resumeActiveTrip(saved){if(!restoreActiveTrip(saved)){clearActiveTrip();resetAll();return}if(!tripStart||routePhase!=='outbound'){toast(tr('activeTripResumed'));return}if(!navigator.geolocation){toast(tr('resumeLocationFail'));return}if(!window.isSecureContext&&!['localhost','127.0.0.1'].includes(location.hostname)){toast(tr('secureRequired'));return}toast(tr('resumeCheckingLocation'));navigator.geolocation.getCurrentPosition(pos=>{if(!tripStart||routePhase!=='outbound')return;lastKnownPosition=pos;persistActiveTrip();updateStatus();toast(tr('resumeLocationVerified'));setTimeout(stepVehicle,100)},()=>{toast(tr('resumeLocationFail'));updateStatus()},{enableHighAccuracy:true,timeout:12000,maximumAge:0})}
+async function resumeActiveTrip(saved){
+ if(!restoreActiveTrip(saved)){clearActiveTrip();resetAll();return}
+ updateTripActionButton();
+ renderTripSummary();
+ if(!tripStart||routePhase!=='outbound'){toast(tr('activeTripResumed'));return}
+ if(!navigator.geolocation){toast(tr('resumeLocationFail'));return}
+ if(!window.isSecureContext&&!['localhost','127.0.0.1'].includes(location.hostname)){toast(tr('secureRequired'));return}
+ toast(tr('resumeCheckingLocation'));
+ navigator.geolocation.getCurrentPosition(pos=>{
+  if(!tripStart||routePhase!=='outbound')return;
+  lastKnownPosition={
+   lat:pos.coords.latitude,
+   lng:pos.coords.longitude,
+   source:'gps',
+   timestamp:new Date().toISOString()
+  };
+  persistActiveTrip();
+  updateTripActionButton();
+  renderTripSummary();
+  updateStatus();
+  toast(tr('resumeLocationVerified'));
+  setTimeout(stepVehicle,100)
+ },()=>{
+  updateTripActionButton();
+  renderTripSummary();
+  toast(tr('resumeLocationFail'));
+  updateStatus()
+ },{enableHighAccuracy:true,timeout:12000,maximumAge:0})
+}
 document.getElementById('planBtn').onclick=handlePlanClick;
 document.getElementById('resetBtn').onclick=resetAll;
 document.getElementById('simBtn').onclick=startSim;

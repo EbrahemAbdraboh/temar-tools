@@ -69,10 +69,11 @@ function renderBranches(){
  const el=document.getElementById('branches');
  el.innerHTML='';
  const locked=!!tripStart||routePhase==='return';
+ const routeLocked=!!routeOrder.length&&!editMode;
  points.branches.forEach(b=>{
   const checked=selected.includes(b.id);
   el.insertAdjacentHTML('beforeend',`<label class="branch ${editMode?'editing':''}">
-   <input type="checkbox" data-id="${b.id}" ${checked?'checked':''} ${locked?'disabled':''}>
+   <input type="checkbox" data-id="${b.id}" ${checked?'checked':''} ${(locked||routeLocked)?'disabled':''}>
    <span class="pin-mini"><i class="fa-solid fa-location-dot"></i></span>
    <span><span class="branch-name">${lang==='ar'?b.nameAr:b.nameEn}</span><span class="meta">${editMode&&!locked?(lang==='ar'?'اضغط لإضافة أو إزالة الفرع':'Tap to add or remove'):''}</span></span>
   </label>`);
@@ -107,8 +108,20 @@ async function handleEditTrip(){
   return;
  }
  if(!selected.length){toast(tr('choose'));return}
- editMode=false;
- await applyBranchEdit([...selected]);
+ // Keep the old route untouched until the user explicitly confirms the edit.
+ confirmBranchEdit();
+}
+function confirmBranchEdit(){
+ const count=selected.length;
+ const message=lang==='ar'
+  ? `سيتم اعتماد اختيار <b>${count}</b> فروع. عند التأكيد سيتم مسح المسار الحالي بالكامل ثم إعادة حساب المسار والبيانات من جديد.<br><br><b>هل تريد تأكيد التعديل؟</b>`
+  : `The current selection contains <b>${count}</b> branches. Confirming will clear the current route completely, then recalculate the route and trip data.<br><br><b>Do you want to confirm this edit?</b>`;
+ openModal(
+  lang==='ar'?'تأكيد تعديل المسار':'Confirm Route Edit',
+  message,
+  ()=>applyBranchEdit([...selected]),
+  {okText:lang==='ar'?'تأكيد وإعادة الحساب':'Confirm & Recalculate',cancelText:lang==='ar'?'إلغاء':'Cancel'}
+ );
 }
 const ROUTING_ENGINES=[
  'https://routing.openstreetmap.de/routed-car/route/v1/driving/',
@@ -138,7 +151,10 @@ async function planRoute(options={}){
  if(tripStart){toast(tr('editLocked'));return}
  if(!selected.length){toast(tr('choose'));return}
 
- // Any route planning after editing must start from a completely clean session.
+ // Any re-plan after an edit starts a brand-new route session. The old
+ // route is removed BEFORE any routing request so it can never be drawn
+ // underneath the new route.
+
  // This also handles the user pressing "تحديد المسار" directly after changing
  // the branch checkboxes instead of pressing "تطبيق التعديل".
  const currentRouteIds=routeOrder.filter(x=>x.id!=='factory').map(x=>x.id);
@@ -150,6 +166,7 @@ async function planRoute(options={}){
   startNewRouteSession();
   editMode=false;
   renderBranches();
+  renderTripSummary();
   updateStatus();
  }
  const session=tripSessionId;
@@ -245,16 +262,18 @@ async function planRoute(options={}){
   updateStatus();
   toast(tr('planned'));
  }catch(e){
-  // Keep a successfully displayed route intact if a later calculation,
-  // rendering, or routing-engine call fails.
-  routeLayer=previousRoute;
-  returnLayer=previousReturn;
-  routeOrder=previousOrder;
-  routeCoords=previousCoords;
-  outboundDistanceKm=previousOutbound;
-  returnDistanceKm=previousReturnDistance;
-  totalTripDistanceKm=previousTotal;
-  routePhase=previousPhase;
+  // If this was a fresh edit session, the old route was intentionally
+  // cleared before calculation. Do not restore it after a routing error.
+  if(!requiresNewSession){
+   routeLayer=previousRoute;
+   returnLayer=previousReturn;
+   routeOrder=previousOrder;
+   routeCoords=previousCoords;
+   outboundDistanceKm=previousOutbound;
+   returnDistanceKm=previousReturnDistance;
+   totalTripDistanceKm=previousTotal;
+   routePhase=previousPhase;
+  }
   console.error('planRoute failed:',e);
   toast((tr('routingFail'))+' '+(e?.message||''));
  }finally{
@@ -303,14 +322,13 @@ function resetAll(){
 async function applyBranchEdit(nextSelected){
  if(tripStart||routePhase==='return'){toast(tr('editLocked'));return}
  const normalized=[...new Set(nextSelected)].filter(id=>points.branches.some(b=>b.id===id));
- if(!normalized.length){toast(tr('choose'));editMode=true;renderBranches();renderTripSummary();return}
+ if(!normalized.length){toast(tr('choose'));return}
  selected=normalized;
  editMode=false;
  syncSelectedBranchMarkers();
- renderBranches();
- fitAll();
- updateStatus();
- renderTripSummary();
+ // planRoute({newSession:true}) is the single source of truth for the
+ // destructive reset + recalculation. The old route is removed before
+ // the routing requests start.
  await planRoute({newSession:true});
  if(routeOrder.length)toast(tr('updated'));
 }

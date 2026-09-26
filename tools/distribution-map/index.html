@@ -369,10 +369,6 @@ function clearHistory(){openModal(tr('clear'),tr('clearConfirm'),()=>{localStora
 function homeNavigation(){openModal(tr('confirmHome'),tr('homeWarn'),()=>{resetAll();const home=document.body.dataset.home||'../../index.html';window.location.href=new URL(home,window.location.href).href;});}
 document.getElementById('planBtn').onclick=handlePlanClick;
 document.getElementById('resetBtn').onclick=resetAll;
-document.getElementById('tripSummary').onclick=e=>{
- const b=e.target.closest('#editTripBtn');
- if(b){e.preventDefault();handleEditTrip();}
-};
 document.getElementById('simBtn').onclick=startSim;
 document.getElementById('clearHistory').onclick=clearHistory;
 document.getElementById('langBtn').onclick=()=>{lang=lang==='ar'?'en':'ar';localStorage.setItem('temar_lang',lang);applyLang()};

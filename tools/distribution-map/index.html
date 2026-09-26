@@ -80,7 +80,13 @@ function renderBranches(){
  });
  el.querySelectorAll('input').forEach(x=>x.addEventListener('change',()=>{
   if(!editMode && routeOrder.length){x.checked=selected.includes(x.dataset.id);return}
-  selected=[...el.querySelectorAll('input:checked')].map(i=>i.dataset.id);
+  const nextSelected=[...el.querySelectorAll('input:checked')].map(i=>i.dataset.id);
+  if(!nextSelected.length){
+   x.checked=true;
+   toast(lang==='ar'?'يجب الإبقاء على فرع واحد على الأقل.':'At least one branch must remain selected.');
+   return;
+  }
+  selected=nextSelected;
   syncSelectedBranchMarkers();fitAll();updateStatus();
  }));
 }
@@ -118,9 +124,10 @@ async function handleEditTrip(){
  await applyBranchEdit([...selected]);
 }
 function handlePlanClick(){
- if(editMode){
-  const planBtn=document.getElementById('planBtn');
-  if(planBtn){planBtn.disabled=true}
+ const planBtn=document.getElementById('planBtn');
+ if(editMode||routeOrder.length){
+  if(planBtn)planBtn.disabled=true;
+  toast(lang==='ar'?'لتغيير المسار اضغط «تعديل المسار» أولًا، أو استخدم «إعادة ضبط».':'To change the route, use “Edit Route” first, or use “Reset”.');
   return;
  }
  planRoute();
@@ -280,8 +287,11 @@ async function planRoute(options={}){
   toast((tr('routingFail'))+' '+(e?.message||''));
  }finally{
   if(btn&&session===tripSessionId){
-   btn.disabled=false;
    btn.dataset.busy='';
+   const routeExists=!!routeOrder.length;
+   // A planned route cannot be planned again directly. The user must
+   // explicitly enter Edit mode or use Reset first.
+   btn.disabled=routeExists||editMode;
    btn.classList.toggle('route-active',!!routeLayer&&routePhase==='outbound');
    const label=btn.querySelector('span');
    if(label)label.textContent=tr('plan');
@@ -326,7 +336,11 @@ function resetAll(){
 async function applyBranchEdit(nextSelected){
  if(tripStart||routePhase==='return'){toast(tr('editLocked'));return}
  const normalized=[...new Set(nextSelected)].filter(id=>points.branches.some(b=>b.id===id));
- if(!normalized.length){toast(tr('choose'));return}
+ if(!normalized.length){
+  renderBranches();
+  toast(lang==='ar'?'يجب الإبقاء على فرع واحد على الأقل.':'At least one branch must remain selected.');
+  return
+ }
  selected=normalized;
  editMode=false;
  syncSelectedBranchMarkers();
@@ -375,7 +389,17 @@ function onLocationSuccess(pos){lastKnownPosition=pos;const p=[pos.coords.latitu
 function onLocationError(err){stopLocationWatch();if(err&&err.code===1){toast(tr('gpsDenied'))}else if(err&&err.code===2){toast(tr('gpsUnavailable'))}else{toast(tr('gpsFail'))}updateStatus()}
 function stopLocationWatch(){if(locationWatchId!==null&&navigator.geolocation){navigator.geolocation.clearWatch(locationWatchId)}locationWatchId=null}
 function clearHistory(){openModal(tr('clear'),tr('clearConfirm'),()=>{localStorage.removeItem('temar_trips');renderHistory();toast(tr('historyClear'))})}
-function homeNavigation(){homeConfirmPending=true;openModal(tr('confirmHome'),tr('homeWarn'),()=>{homeConfirmPending=false;resetAll();const home=document.body.dataset.home||'../../index.html';window.location.href=new URL(home,window.location.href).href;},{onCancel:()=>{homeConfirmPending=false}});}
+function homeNavigation(){
+ homeConfirmPending=true;
+ const modal=document.getElementById('modal');
+ if(modal)modal.style.display='none';
+ openModal(tr('confirmHome'),tr('homeWarn'),()=>{
+  homeConfirmPending=false;
+  resetAll();
+  const home=document.body.dataset.home||'../../index.html';
+  window.location.href=new URL(home,window.location.href).href;
+ },{onCancel:()=>{homeConfirmPending=false}});
+}
 document.getElementById('planBtn').onclick=handlePlanClick;
 document.getElementById('resetBtn').onclick=resetAll;
 document.getElementById('simBtn').onclick=startSim;

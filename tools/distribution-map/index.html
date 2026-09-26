@@ -116,11 +116,31 @@ const ROUTING_ENGINES=[
 ];
 async function fetchWithTimeout(url,ms=12000){const c=new AbortController();const t=setTimeout(()=>c.abort(),ms);try{const r=await fetch(url,{method:'GET',headers:{'Accept':'application/json'},mode:'cors',signal:c.signal,cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const d=await r.json();if(d.code!=='Ok'||!d.routes?.[0])throw new Error(d.message||d.code||'routing');return d}finally{clearTimeout(t)}}
 async function getRoute(coords){let lastErr=null;const path=coords.map(p=>encodeURIComponent(p.lng+','+p.lat)).join(';');for(const base of ROUTING_ENGINES){try{const d=await fetchWithTimeout(base+path+'?overview=full&geometries=geojson&steps=false');return {geometry:d.routes[0].geometry,distanceKm:d.routes[0].distance/1000,durationMin:d.routes[0].duration/60,engine:base.includes('openstreetmap.de')?'OSM Router':'OSRM Demo'};}catch(e){lastErr=e}}throw lastErr||new Error('routing')}
-function clearLayers(){if(routeOverlayGroup)routeOverlayGroup.clearLayers();if(routeLayer){map.removeLayer(routeLayer);routeLayer=null}if(returnLayer){map.removeLayer(returnLayer);returnLayer=null}if(truckMarker){map.removeLayer(truckMarker);truckMarker=null}}
-async function planRoute(){
- const session=tripSessionId;
+function clearLayers(){if(routeOverlayGroup)routeOverlayGroup.clearLayers();if(routeLayer){map.removeLayer(routeLayer)}if(returnLayer){map.removeLayer(returnLayer)}if(truckMarker){map.removeLayer(truckMarker)}routeLayer=null;returnLayer=null;truckMarker=null}
+function startNewRouteSession(){
+  tripSessionId++;
+  clearLayers();
+  routeCoords=[];
+  routeIndex=0;
+  tripArrivals=[];
+  routeOrder=[];
+  routePhase='none';
+  outboundDistanceKm=0;
+  returnDistanceKm=0;
+  totalTripDistanceKm=0;
+  waitingForArrival=false;
+  arrivalPrompted=false;
+  stopIndexes=[];
+  lastKnownPosition=null;
+}
+async function planRoute(options={}){
+ const newSession=options.newSession===true;
  if(tripStart){toast(tr('editLocked'));return}
  if(!selected.length){toast(tr('choose'));return}
+ if(newSession){
+  startNewRouteSession();
+ }
+ const session=tripSessionId;
  const btn=document.getElementById('planBtn');
  if(btn){
   btn.disabled=true;
@@ -270,14 +290,16 @@ function resetAll(){
 }
 async function applyBranchEdit(nextSelected){
  if(tripStart||routePhase==='return'){toast(tr('editLocked'));return}
- tripSessionId++;
  const normalized=[...new Set(nextSelected)].filter(id=>points.branches.some(b=>b.id===id));
  if(!normalized.length){toast(tr('choose'));editMode=true;renderBranches();renderTripSummary();return}
- selected=normalized;clearLayers();
- routeOrder=[];routeCoords=[];stopIndexes=[];routePhase='none';
- outboundDistanceKm=0;returnDistanceKm=0;totalTripDistanceKm=0;
- syncSelectedBranchMarkers();renderBranches();fitAll();updateStatus();renderTripSummary();
- await planRoute();
+ selected=normalized;
+ editMode=false;
+ syncSelectedBranchMarkers();
+ renderBranches();
+ fitAll();
+ updateStatus();
+ renderTripSummary();
+ await planRoute({newSession:true});
  if(routeOrder.length)toast(tr('updated'));
 }
 function startSim(){if(!routeCoords.length||routePhase!=='outbound'){toast(lang==='ar'?'حدد مسار الذهاب أولًا.':'Plan the outbound route first.');return}if(tripStart){return}tripStart=new Date();tripArrivals=[];routeIndex=0;waitingForArrival=false;if(truckMarker)map.removeLayer(truckMarker);truckMarker=L.marker(routeCoords[0],{icon:truckIcon(),zIndexOffset:1500}).addTo(routeOverlayGroup);updateStatus();toast(tr('simStart'));stepVehicle()}

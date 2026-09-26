@@ -102,13 +102,20 @@ async function handleEditTrip(){
  if(!editMode){
   editMode=true;
   renderBranches();
-  renderTripSummary();
+  // Do not rebuild tripSummary here. Replacing the clicked button during
+  // its own click event can cause the confirmation action to fire immediately.
+  const icon=btn.querySelector('i');
+  const label=btn.querySelector('span');
+  if(icon)icon.className='fa-solid fa-check';
+  if(label)label.textContent=tr('applyEdit');
+  btn.classList.remove('secondary');
+  btn.classList.add('orange');
   updateStatus();
   toast(tr('editHint'));
   return;
  }
  if(!selected.length){toast(tr('choose'));return}
- applyBranchEdit([...selected]);
+ await applyBranchEdit([...selected]);
 }
 function handlePlanClick(){
  if(editMode){

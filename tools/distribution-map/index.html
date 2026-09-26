@@ -208,7 +208,8 @@ function onLocationError(err){stopLocationWatch();if(err&&err.code===1){toast(tr
 function stopLocationWatch(){if(locationWatchId!==null&&navigator.geolocation){navigator.geolocation.clearWatch(locationWatchId)}locationWatchId=null}
 function clearHistory(){openModal(tr('clear'),tr('clearConfirm'),()=>{localStorage.removeItem('temar_trips');renderHistory();toast(tr('historyClear'))})}
 function homeNavigation(){openModal(tr('confirmHome'),tr('homeWarn'),()=>{resetAll();const home=document.body.dataset.home||'../../index.html';window.location.href=new URL(home,window.location.href).href;});}
-document.getElementById('planBtn').onclick=planRoute;\ndocument.getElementById('resetBtn').onclick=resetAll;
+document.getElementById('planBtn').onclick=planRoute;
+document.getElementById('resetBtn').onclick=resetAll;
 document.getElementById('simBtn').onclick=startSim;
 document.getElementById('clearHistory').onclick=clearHistory;
 document.getElementById('langBtn').onclick=()=>{lang=lang==='ar'?'en':'ar';localStorage.setItem('temar_lang',lang);applyLang()};

@@ -91,7 +91,7 @@ function renderTripSummary(){
  const branches=routeOrder.filter(x=>x.id!=='factory');
  const d=(totalTripDistanceKm||0).toFixed(1);
  const locked=!!tripStart||routePhase==='return';
- el.innerHTML=`<div class="trip-summary"><div class="trip-summary-title">${tr('routeReady')}</div><div class="trip-stats"><div class="trip-stat"><strong>${branches.length}</strong><span>${tr('branchesCount')}</span></div><div class="trip-stat"><strong>${d} <small>${tr('km')}</small></strong><span>${tr('totalDistance')}</span></div></div><div class="route-state">${routePhase==='outbound'?tr('routeOutbound'):routePhase==='return'?tr('returnShown'):tr('statusPlanned')}</div>${!locked?`<div class="actions" style="margin-top:10px"><button type="button" class="btn secondary" id="editTripBtn"><i class="fa-solid fa-pen-to-square"></i><span>${editMode?tr('applyEdit'):tr('edit')}</span></button></div>`:''}</div>`;
+ el.innerHTML=`<div class="trip-summary"><div class="trip-summary-title">${tr('routeReady')}</div><div class="trip-stats"><div class="trip-stat"><strong>${branches.length}</strong><span>${tr('branchesCount')}</span></div><div class="trip-stat"><strong>${d} <small>${tr('km')}</small></strong><span>${tr('totalDistance')}</span></div></div><div class="route-state">${routePhase==='outbound'?tr('routeOutbound'):routePhase==='return'?tr('returnShown'):tr('statusPlanned')}</div>${!locked?`<div class="actions" style="margin-top:10px"><button type="button" class="btn secondary" id="editTripBtn"><i class="fa-solid ${editMode?'fa-check':'fa-pen-to-square'}"></i><span>${editMode?tr('applyEdit'):tr('edit')}</span></button></div>`:''}</div>`;
  const btn=document.getElementById('editTripBtn');
  if(btn&&!locked) btn.onclick=handleEditTrip;
 }
@@ -108,28 +108,15 @@ async function handleEditTrip(){
   return;
  }
  if(!selected.length){toast(tr('choose'));return}
- // Keep the old route untouched until the user explicitly confirms the edit.
- confirmBranchEdit();
+ applyBranchEdit([...selected]);
 }
 function handlePlanClick(){
  if(editMode){
-  if(!selected.length){toast(tr('choose'));return}
-  confirmBranchEdit();
+  const planBtn=document.getElementById('planBtn');
+  if(planBtn){planBtn.disabled=true}
   return;
  }
  planRoute();
-}
-function confirmBranchEdit(){
- const count=selected.length;
- const message=lang==='ar'
-  ? `سيتم اعتماد اختيار <b>${count}</b> فروع. عند التأكيد سيتم مسح المسار الحالي بالكامل ثم إعادة حساب المسار والبيانات من جديد.<br><br><b>هل تريد تأكيد التعديل؟</b>`
-  : `The current selection contains <b>${count}</b> branches. Confirming will clear the current route completely, then recalculate the route and trip data.<br><br><b>Do you want to confirm this edit?</b>`;
- openModal(
-  lang==='ar'?'تأكيد تعديل المسار':'Confirm Route Edit',
-  message,
-  ()=>applyBranchEdit([...selected]),
-  {okText:lang==='ar'?'تأكيد وإعادة الحساب':'Confirm & Recalculate',cancelText:lang==='ar'?'إلغاء':'Cancel'}
- );
 }
 const ROUTING_ENGINES=[
  'https://routing.openstreetmap.de/routed-car/route/v1/driving/',
@@ -334,9 +321,9 @@ async function applyBranchEdit(nextSelected){
  selected=normalized;
  editMode=false;
  syncSelectedBranchMarkers();
- // planRoute({newSession:true}) is the single source of truth for the
- // destructive reset + recalculation. The old route is removed before
- // the routing requests start.
+ renderBranches();
+ renderTripSummary();
+ updateStatus();
  await planRoute({newSession:true});
  if(routeOrder.length)toast(tr('updated'));
 }

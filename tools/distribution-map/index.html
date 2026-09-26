@@ -91,6 +91,10 @@ function renderBranches(){
   syncSelectedBranchMarkers();fitAll();updateStatus();
  }));
 }
+function formatClock(sec){sec=Math.max(0,Math.floor(Number(sec)||0));const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;return [h,m,s].map(v=>String(v).padStart(2,'0')).join(':')}
+function timelineLabel(type){return ({TRIP_STARTED:tr('tripStartedEvent'),ARRIVED_AT_BRANCH:tr('arrivalEvent'),DELIVERY_CONFIRMED:tr('deliveryEvent'),RETURN_STARTED:tr('returnStartedEvent'),FACTORY_REACHED:tr('factoryReachedEvent'),TRIP_ENDED:tr('tripEndedEvent')})[type]||type}
+function addTripEvent(type,payload={}){const realTime=new Date().toISOString(),simulatedTime=tripStart?new Date(new Date(tripStart).getTime()+simulatedElapsedSec*1000).toISOString():realTime;tripEvents.push({type,time:realTime,simulatedTime,payload});renderTimeline();persistActiveTrip()}
+function renderTimeline(){const el=document.getElementById('timeline');if(!el)return;if(!tripEvents.length){el.innerHTML='';return}const start=tripStart?new Date(tripStart):new Date();const rows=tripEvents.slice().reverse().map(e=>{const b=e.payload?.branchId?points.branches.find(x=>x.id===e.payload.branchId):null;const name=b?(lang==='ar'?b.nameAr:b.nameEn):'';const sim=new Date(e.simulatedTime||e.time);const rel=Math.max(0,(sim-start)/1000);return `<div class="timeline-item"><div class="timeline-time">${formatClock(rel)}</div><div class="timeline-text"><b>${timelineLabel(e.type)}</b>${name?' — '+name:''}</div></div>`}).join('');el.innerHTML=`<div class="timeline"><div class="timeline-head"><strong><i class="fa-solid fa-timeline"></i> ${tr('timeline')}</strong><span class="timeline-clock">${tr('simTime')}: ${formatClock(simulatedElapsedSec)}</span></div><div class="timeline-list">${rows}</div></div>`}
 function updateStatus(){const el=document.getElementById('status');if(locationWatchId!==null){el.innerHTML=`<i class="fa-solid fa-location-dot"></i> ${tr('statusGps')}`;return}if(tripStart){el.innerHTML=lang==='ar'?`الرحلة قيد التشغيل — تم تأكيد <b>${tripArrivals.length}</b> من <b>${routeOrder.filter(x=>x.id!=='factory').length}</b> فروع.`:`Trip in progress — <b>${tripArrivals.length}</b> of <b>${routeOrder.filter(x=>x.id!=='factory').length}</b> branches confirmed.`;return}el.innerHTML=lang==='ar'?`تم اختيار <b>${selected.length}</b> من 3 فروع.`:`<b>${selected.length}</b> of 3 branches selected.`}
 function renderTripSummary(){
  const el=document.getElementById('tripSummary');
@@ -157,7 +161,7 @@ function startNewRouteSession(){
   waitingForArrival=false;
   arrivalPrompted=false;
   stopIndexes=[];
-  lastKnownPosition=null;
+  lastKnownPosition=null;tripEvents=[];simulationActive=false;simulatedElapsedSec=0;if(simTimer){clearInterval(simTimer);simTimer=null}renderTimeline();
 }
 async function planRoute(options={}){
  const newSession=options.newSession===true;
@@ -313,7 +317,7 @@ let routeGeometry=null;
 let returnGeometry=null;
 function getActiveTrip(){try{return JSON.parse(localStorage.getItem(ACTIVE_TRIP_KEY)||'null')}catch(e){return null}}
 function clearActiveTrip(){localStorage.removeItem(ACTIVE_TRIP_KEY)}
-function persistActiveTrip(){if(!routeOrder.length)return;const status=routePhase==='return'?'completed':tripStart?'in_progress':'planned';const payload={version:1,tripId:tripSessionId,status,selected:[...selected],routeOrder:routeOrder.map(x=>x.id),routeCoords:[...routeCoords],stopIndexes:[...stopIndexes],routeGeometry,returnGeometry,outboundDistanceKm,returnDistanceKm,totalTripDistanceKm,routePhase,routeIndex,tripStart:tripStart?tripStart.toISOString():null,tripArrivals:[...tripArrivals],lastKnownPosition:lastKnownPosition?{lat:lastKnownPosition.coords?lastKnownPosition.coords.latitude:lastKnownPosition.lat,lng:lastKnownPosition.coords?lastKnownPosition.coords.longitude:lastKnownPosition.lng}:null,savedAt:new Date().toISOString()};localStorage.setItem(ACTIVE_TRIP_KEY,JSON.stringify(payload))}
+function persistActiveTrip(){if(!routeOrder.length)return;const status=routePhase==='return'?'completed':tripStart?'in_progress':'planned';const payload={version:1,tripId:tripSessionId,status,selected:[...selected],routeOrder:routeOrder.map(x=>x.id),routeCoords:[...routeCoords],stopIndexes:[...stopIndexes],routeGeometry,returnGeometry,outboundDistanceKm,returnDistanceKm,totalTripDistanceKm,routePhase,routeIndex,tripStart:tripStart?tripStart.toISOString():null,tripArrivals:[...tripArrivals],tripEvents:[...tripEvents],simulationActive,simulatedElapsedSec,simSpeed,lastKnownPosition:lastKnownPosition?{lat:lastKnownPosition.coords?lastKnownPosition.coords.latitude:lastKnownPosition.lat,lng:lastKnownPosition.coords?lastKnownPosition.coords.longitude:lastKnownPosition.lng}:null,savedAt:new Date().toISOString()};localStorage.setItem(ACTIVE_TRIP_KEY,JSON.stringify(payload))}
 function rebuildRouteOrder(ids){return(ids||[]).map(id=>id==='factory'?points.factory:points.branches.find(b=>b.id===id)).filter(Boolean)}
 function restoreActiveTrip(saved){
  if(!saved||!saved.routeOrder?.length)return false;
@@ -329,7 +333,7 @@ function restoreActiveTrip(saved){
  routePhase=saved.routePhase||'none';
  routeIndex=Math.min(Number(saved.routeIndex)||0,Math.max(0,routeCoords.length-1));
  tripStart=saved.tripStart?new Date(saved.tripStart):null;
- tripArrivals=saved.tripArrivals||[];
+ tripArrivals=saved.tripArrivals||[];tripEvents=saved.tripEvents||[];simulationActive=false;simulatedElapsedSec=Number(saved.simulatedElapsedSec)||0;simSpeed=Number(saved.simSpeed)||30;if(simTimer){clearInterval(simTimer);simTimer=null}
  lastKnownPosition=saved.lastKnownPosition?{
   lat:Number(saved.lastKnownPosition.lat),
   lng:Number(saved.lastKnownPosition.lng),
@@ -352,7 +356,7 @@ function restoreActiveTrip(saved){
  }
  syncSelectedBranchMarkers();
  renderBranches();
- renderTripSummary();
+ renderTripSummary();renderTimeline();
  updateTripActionButton();
  updateStatus();
  const layers=[routeLayer,returnLayer].filter(Boolean);
@@ -382,7 +386,7 @@ function resetAll(){
  waitingForArrival=false;
  arrivalPrompted=false;
  stopIndexes=[];
- lastKnownPosition=null;
+ lastKnownPosition=null;tripEvents=[];simulationActive=false;simulatedElapsedSec=0;if(simTimer){clearInterval(simTimer);simTimer=null}renderTimeline();
  if(document.getElementById('planBtn')){
   document.getElementById('planBtn').disabled=selected.length===0;
   document.getElementById('planBtn').dataset.busy='';
@@ -415,11 +419,16 @@ async function applyBranchEdit(nextSelected){
 }
 function routeDistanceUntilIndex(index){let total=0;for(let i=1;i<=Math.min(index,routeCoords.length-1);i++){const a=routeCoords[i-1],b=routeCoords[i];total+=dist({lat:a[0],lng:a[1]},{lat:b[0],lng:b[1]})}return total}
 function updateTripActionButton(){const b=document.getElementById('simBtn');if(!b)return;const active=!!tripStart;const finished=routePhase==='return';b.disabled=finished;b.classList.toggle('orange',!active&&!finished);b.classList.toggle('secondary',active||finished);const icon=b.querySelector('i'),label=b.querySelector('span');if(icon)icon.className=active?'fa-solid fa-flag-checkered':'fa-solid fa-truck';if(label)label.textContent=tr(active?'endTrip':'startTrip')}
-function startSim(){if(tripStart){requestEndTrip();return}if(!routeCoords.length||routePhase!=='outbound'){toast(lang==='ar'?'حدد مسار الذهاب أولًا.':'Plan the outbound route first.');return}tripStart=new Date();tripArrivals=[];routeIndex=0;waitingForArrival=false;tripFinishing=false;lastKnownPosition={lat:routeCoords[0][0],lng:routeCoords[0][1],source:'route',timestamp:new Date().toISOString()};if(truckMarker)map.removeLayer(truckMarker);truckMarker=L.marker(routeCoords[0],{icon:truckIcon(),zIndexOffset:1500}).addTo(routeOverlayGroup);persistActiveTrip();updateTripActionButton();updateStatus();toast(tr('simStart'));stepVehicle()}
+function routePointDistance(a,b){return dist({lat:a[0],lng:a[1]},{lat:b[0],lng:b[1]})*1000}
+function moveAlongRouteMeters(meters){let remaining=Math.max(0,Number(meters)||0);while(remaining>0&&routeIndex<routeCoords.length-1){const a=routeCoords[routeIndex],b=routeCoords[routeIndex+1],seg=routePointDistance(a,b);if(seg<=0){routeIndex++;continue}if(remaining>=seg){remaining-=seg;routeIndex++;continue}const t=remaining/seg,p=[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];if(truckMarker)truckMarker.setLatLng(p);lastKnownPosition={lat:p[0],lng:p[1],source:'simulator',timestamp:new Date().toISOString()};return}const p=routeCoords[routeIndex]||routeCoords[0];if(truckMarker&&p)truckMarker.setLatLng(p);if(p)lastKnownPosition={lat:p[0],lng:p[1],source:'simulator',timestamp:new Date().toISOString()}}
+function simulatorTick(){if(!tripStart||routePhase!=='outbound'||waitingForArrival||tripFinishing)return;moveAlongRouteMeters(3);simulatedElapsedSec+=3;const next=routeOrder.find(x=>x.id!=='factory'&&!tripArrivals.some(a=>a.id===x.id)),stop=next?stopIndexes.find(s=>s.id===next.id):null;if(next&&stop&&routeIndex>=stop.index&&!arrivalPrompted){arrivalPrompted=true;waitingForArrival=true;simulationActive=false;if(simTimer){clearInterval(simTimer);simTimer=null}addTripEvent('ARRIVED_AT_BRANCH',{branchId:next.id});showArrival(next);return}persistActiveTrip();renderTimeline();updateStatus()}
+function startSim(){if(tripStart){requestEndTrip();return}if(!routeCoords.length||routePhase!=='outbound'){toast(lang==='ar'?'حدد مسار الذهاب أولًا.':'Plan the outbound route first.');return}tripStart=new Date();tripArrivals=[];tripEvents=[];simulatedElapsedSec=0;simulationActive=false;waitingForArrival=false;tripFinishing=false;routeIndex=0;lastKnownPosition={lat:routeCoords[0][0],lng:routeCoords[0][1],source:'simulator',timestamp:new Date().toISOString()};if(truckMarker)map.removeLayer(truckMarker);truckMarker=L.marker(routeCoords[0],{icon:truckIcon(),zIndexOffset:1500}).addTo(routeOverlayGroup);addTripEvent('TRIP_STARTED');persistActiveTrip();updateTripActionButton();updateSimulationControls();updateStatus();renderTimeline();toast(tr('simStart'));simulatorTick()}
+function toggleSimulation(){if(!tripStart||routePhase!=='outbound'||waitingForArrival)return;simulationActive=!simulationActive;if(simTimer){clearInterval(simTimer);simTimer=null}if(simulationActive){const interval=Math.max(60,Math.round(3000/simSpeed));simTimer=setInterval(simulatorTick,interval);toast(tr('simAutoStarted'))}else toast(tr('simAutoStopped'));updateSimulationControls()}
+function updateSimulationControls(){const b=document.getElementById('simAutoBtn'),s=document.getElementById('simSpeed'),step=document.getElementById('simStepBtn');if(!b)return;b.disabled=!tripStart||routePhase!=='outbound'||waitingForArrival;b.querySelector('i').className=simulationActive?'fa-solid fa-pause':'fa-solid fa-play';b.querySelector('span').textContent=tr(simulationActive?'simPause':'simAuto');if(s)s.value=String(simSpeed);if(step)step.disabled=!tripStart||routePhase!=='outbound'||waitingForArrival}
 function requestEndTrip(){if(!tripStart||tripFinishing)return;openModal(tr('endTripTitle'),tr('endTripAsk'),()=>finishTrip('manual'))}
 function stepVehicle(){if(homeConfirmPending||tripFinishing||!truckMarker||routeIndex>=routeCoords.length-1||waitingForArrival)return;routeIndex++;truckMarker.setLatLng(routeCoords[routeIndex]);lastKnownPosition={lat:routeCoords[routeIndex][0],lng:routeCoords[routeIndex][1],source:'route',timestamp:new Date().toISOString()};if(routeIndex%12===0)persistActiveTrip();const next=routeOrder.find(x=>x.id!=='factory'&&!tripArrivals.some(a=>a.id===x.id));const stop=next?stopIndexes.find(s=>s.id===next.id):null;if(next&&stop&&routeIndex>=stop.index&&!arrivalPrompted){arrivalPrompted=true;waitingForArrival=true;persistActiveTrip();showArrival(next);return}setTimeout(stepVehicle,80)}
 function distPoint(point,latlng){return dist(point,{lat:latlng[0],lng:latlng[1]})}
-function showArrival(branch){if(homeConfirmPending)return;setHomeNavigationLocked(true);openModal(tr('confirm'),`${tr('arrive')} <b>${lang==='ar'?branch.nameAr:branch.nameEn}</b><br>${tr('arrivalAsk')}`,()=>{if(tripArrivals.some(a=>a.id===branch.id))return;tripArrivals.push({id:branch.id,time:new Date().toISOString()});arrivalPrompted=false;waitingForArrival=false;persistActiveTrip();setHomeNavigationLocked(false);updateStatus();renderTripSummary();setTimeout(stepVehicle,100)})}
+function showArrival(branch){if(homeConfirmPending)return;setHomeNavigationLocked(true);openModal(tr('confirm'),`${tr('arrive')} <b>${lang==='ar'?branch.nameAr:branch.nameEn}</b><br>${tr('arrivalAsk')}`,()=>{if(tripArrivals.some(a=>a.id===branch.id))return;tripArrivals.push({id:branch.id,time:new Date().toISOString()});addTripEvent('DELIVERY_CONFIRMED',{branchId:branch.id});arrivalPrompted=false;waitingForArrival=false;persistActiveTrip();setHomeNavigationLocked(false);updateStatus();renderTripSummary();updateSimulationControls()})}
 async function finishTrip(reason='manual'){
  if(!tripStart||routePhase!=='outbound'||tripFinishing)return;
  tripFinishing=true;
@@ -433,15 +442,15 @@ async function finishTrip(reason='manual'){
   returnDistanceKm=ret.distanceKm;totalTripDistanceKm=outboundDistanceKm+returnDistanceKm;
   if(returnLayer)map.removeLayer(returnLayer);
   returnLayer=L.geoJSON(ret.geometry,{style:{color:'#F58112',weight:6,opacity:.92,dashArray:'10 8'}}).addTo(routeOverlayGroup);
-  returnGeometry=ret.geometry;routePhase='return';
+  returnGeometry=ret.geometry;routePhase='return';if(!tripEvents.some(e=>e.type==='RETURN_STARTED'))addTripEvent('RETURN_STARTED');
   if(truckMarker)truckMarker.setLatLng([points.factory.lat,points.factory.lng]);
   map.fitBounds(L.featureGroup([routeLayer,returnLayer]).getBounds(),{padding:[40,40]});
-  const end=new Date(),doneIds=new Set(tripArrivals.map(a=>a.id));
+  const end=new Date(),doneIds=new Set(tripArrivals.map(a=>a.id));if(!tripEvents.some(e=>e.type==='FACTORY_REACHED'))addTripEvent('FACTORY_REACHED');if(!tripEvents.some(e=>e.type==='TRIP_ENDED'))addTripEvent('TRIP_ENDED');
   const branches=routeOrder.filter(x=>x.id!=='factory').map(x=>({id:x.id,delivered:doneIds.has(x.id),arrivalTime:(tripArrivals.find(a=>a.id===x.id)||{}).time||null}));
   const completed=branches.every(x=>x.delivered);
-  const trip={date:end.toISOString(),start:tripStartedAt.toISOString(),end:end.toISOString(),status:completed?'completed':'ended_early',endReason:reason,branches,branchIds:branches.map(x=>x.id),arrivals:tripArrivals,distanceKm:totalTripDistanceKm,outboundDistanceKm,returnDistanceKm,durationSec:Math.max(0,Math.round((end-tripStartedAt)/1000))};
+  const trip={date:end.toISOString(),start:tripStartedAt.toISOString(),end:end.toISOString(),status:completed?'completed':'ended_early',endReason:reason,branches,branchIds:branches.map(x=>x.id),arrivals:tripArrivals,distanceKm:totalTripDistanceKm,outboundDistanceKm,returnDistanceKm,durationSec:tripEvents.length?Math.max(0,Math.round(simulatedElapsedSec)):Math.max(0,Math.round((end-tripStartedAt)/1000))};
   const h=JSON.parse(localStorage.getItem('temar_trips')||'[]');h.unshift(trip);localStorage.setItem('temar_trips',JSON.stringify(h.slice(0,20)));
-  renderHistory();tripStart=null;updateStatus();renderTripSummary();clearActiveTrip();tripFinishing=false;updateTripActionButton();toast(completed?tr('done'):tr('endedEarly'));
+  renderHistory();tripStart=null;simulationActive=false;if(simTimer){clearInterval(simTimer);simTimer=null}updateStatus();renderTripSummary();renderTimeline();tripFinishing=false;updateTripActionButton();updateSimulationControls();clearActiveTrip();toast(completed?tr('done'):tr('endedEarly'));
  }catch(e){tripFinishing=false;if(session===tripSessionId)toast(tr('routingFail'))}
 }
 function formatDuration(sec){sec=Math.max(0,Number(sec)||0);const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;return h?(h+' '+tr('hours')+' '+m+' '+tr('minutes')):(m+' '+tr('minutes')+' '+s+' '+tr('seconds'))}

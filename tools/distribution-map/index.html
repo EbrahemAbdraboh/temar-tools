@@ -67,7 +67,7 @@ function syncSelectedBranchMarkers(){if(!map)return;points.branches.forEach((b,i
 function fitAll(){const visible=points.branches.filter(b=>selected.includes(b.id));const ll=[L.latLng(points.factory.lat,points.factory.lng),...visible.map(b=>L.latLng(b.lat,b.lng))];map.fitBounds(L.latLngBounds(ll),{padding:[45,45],maxZoom:14})}
 function renderBranches(){const el=document.getElementById('branches');el.innerHTML='';const locked=!!routeOrder.length;points.branches.forEach(b=>{const checked=selected.includes(b.id);el.insertAdjacentHTML('beforeend',`<label class="branch"><input type="checkbox" data-id="${b.id}" ${checked?'checked':''} ${locked?'disabled':''}><span class="pin-mini"><i class="fa-solid fa-location-dot"></i></span><span><span class="branch-name">${lang==='ar'?b.nameAr:b.nameEn}</span></span></label>`);});el.querySelectorAll('input').forEach(x=>x.addEventListener('change',()=>{selected=[...el.querySelectorAll('input:checked')].map(i=>i.dataset.id);syncSelectedBranchMarkers();fitAll();updateStatus();}));}
 function updateStatus(){const el=document.getElementById('status');if(locationWatchId!==null){el.innerHTML=`<i class="fa-solid fa-location-dot"></i> ${tr('statusGps')}`;return}if(tripStart){el.innerHTML=lang==='ar'?`الرحلة قيد التشغيل — تم تأكيد <b>${tripArrivals.length}</b> من <b>${routeOrder.filter(x=>x.id!=='factory').length}</b> فروع.`:`Trip in progress — <b>${tripArrivals.length}</b> of <b>${routeOrder.filter(x=>x.id!=='factory').length}</b> branches confirmed.`;return}el.innerHTML=lang==='ar'?`تم اختيار <b>${selected.length}</b> من 3 فروع.`:`<b>${selected.length}</b> of 3 branches selected.`}
-function renderTripSummary(){const el=document.getElementById('tripSummary');if(!routeOrder.length){el.innerHTML='';return}const branches=routeOrder.filter(x=>x.id!=='factory');const d=(totalTripDistanceKm||0).toFixed(1);const locked=!!tripStart||routePhase==='return';el.innerHTML=`<div class="trip-summary"><div class="trip-summary-title">${tr('routeReady')}</div><div class="trip-stats"><div class="trip-stat"><strong>${branches.length}</strong><span>${tr('branchesCount')}</span></div><div class="trip-stat"><strong>${d} <small>${tr('km')}</small></strong><span>${tr('totalDistance')}</span></div></div><div class="route-state">${routePhase==='outbound'?tr('routeOutbound'):routePhase==='return'?tr('returnShown'):tr('statusPlanned')}</div><div class="actions" style="margin-top:10px"><button class="btn secondary" id="editTripBtn" ${locked?'disabled':''}><i class="fa-solid fa-pen-to-square"></i><span>${tr('edit')}</span></button></div><div id="editList" class="edit-list" style="display:none"><div class="meta">${tr('editHint')}</div>${branches.map(b=>`<div class="edit-row"><span>${lang==='ar'?b.nameAr:b.nameEn}</span><button class="remove-branch" data-remove="${b.id}"><i class="fa-solid fa-xmark"></i> ${tr('remove')}</button></div>`).join('')}</div></div>`;const btn=document.getElementById('editTripBtn');if(btn&&!locked){btn.onclick=()=>{const l=document.getElementById('editList');l.style.display=l.style.display==='none'?'grid':'none';document.querySelectorAll('[data-remove]').forEach(x=>x.onclick=()=>removeBranchFromTrip(x.dataset.remove));}}}
+function renderTripSummary(){const el=document.getElementById('tripSummary');if(!routeOrder.length){el.innerHTML='';return}const branches=routeOrder.filter(x=>x.id!=='factory');const d=(totalTripDistanceKm||0).toFixed(1);const locked=!!tripStart||routePhase==='return';el.innerHTML=`<div class="trip-summary"><div class="trip-summary-title">${tr('routeReady')}</div><div class="trip-stats"><div class="trip-stat"><strong>${branches.length}</strong><span>${tr('branchesCount')}</span></div><div class="trip-stat"><strong>${d} <small>${tr('km')}</small></strong><span>${tr('totalDistance')}</span></div></div><div class="route-state">${routePhase==='outbound'?tr('routeOutbound'):routePhase==='return'?tr('returnShown'):tr('statusPlanned')}</div><div class="actions" style="margin-top:10px"><button class="btn secondary" id="editTripBtn" ${locked?'disabled':''}><i class="fa-solid fa-pen-to-square"></i><span>${tr('edit')}</span></button></div><div id="editList" class="edit-list" style="display:none"><div class="meta">${tr('editHint')}</div>${branches.map(b=>`<div class="edit-row"><span>${lang==='ar'?b.nameAr:b.nameEn}</span><button type="button" class="remove-branch" data-remove="${b.id}" onclick="removeBranchFromTrip(\'${b.id}\')"><i class="fa-solid fa-xmark"></i> ${tr('remove')}</button></div>`).join('')}</div></div>`;const btn=document.getElementById('editTripBtn');if(btn&&!locked){btn.onclick=()=>{const l=document.getElementById('editList');l.style.display=l.style.display==='none'?'grid':'none';document.querySelectorAll('[data-remove]').forEach(x=>x.onclick=()=>removeBranchFromTrip(x.dataset.remove));}}}
 const ROUTING_ENGINES=[
  'https://routing.openstreetmap.de/routed-car/route/v1/driving/',
  'https://router.project-osrm.org/route/v1/driving/'
@@ -190,14 +190,58 @@ async function planRoute(){
  }
 }
 function dist(a,b){const R=6371,p=Math.PI/180,dLat=(b.lat-a.lat)*p,dLon=(b.lng-a.lng)*p,x=Math.sin(dLat/2)**2+Math.cos(a.lat*p)*Math.cos(b.lat*p)*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
-function resetAll(){stopLocationWatch();selected=[];clearLayers();routeCoords=[];routeIndex=0;tripStart=null;tripArrivals=[];routeOrder=[];routePhase='none';outboundDistanceKm=0;returnDistanceKm=0;totalTripDistanceKm=0;waitingForArrival=false;arrivalPrompted=false;stopIndexes=[];syncSelectedBranchMarkers();renderBranches();fitAll();updateStatus();renderTripSummary();toast(lang==='ar'?'تمت إعادة الضبط.':'Reset complete.')}
-async function removeBranchFromTrip(id){if(tripStart){toast(tr('editLocked'));return}const remaining=routeOrder.filter(x=>x.id==='factory'||x.id!==id);if(!remaining.filter(x=>x.id!=='factory').length){toast(tr('noBranchesAfterEdit'));return}selected=remaining.filter(x=>x.id!=='factory').map(x=>x.id);routeOrder=[];await planRoute();toast(tr('updated'))}
+let tripSessionId=0;
+function resetAll(){
+ stopLocationWatch();
+ tripSessionId++;
+ selected=[];clearLayers();routeCoords=[];routeIndex=0;tripStart=null;tripArrivals=[];routeOrder=[];routePhase='none';
+ outboundDistanceKm=0;returnDistanceKm=0;totalTripDistanceKm=0;waitingForArrival=false;arrivalPrompted=false;stopIndexes=[];
+ lastKnownPosition=null;
+ syncSelectedBranchMarkers();renderBranches();fitAll();updateStatus();renderTripSummary();
+ toast(lang==='ar'?'تمت إعادة الضبط.':'Reset complete.');
+}
+async function removeBranchFromTrip(id){
+ if(tripStart){toast(tr('editLocked'));return}
+ const remaining=routeOrder.filter(x=>x.id==='factory'||x.id!==id);
+ if(!remaining.filter(x=>x.id!=='factory').length){toast(tr('noBranchesAfterEdit'));return}
+ selected=remaining.filter(x=>x.id!=='factory').map(x=>x.id);
+ clearLayers();
+ routeOrder=[]; routeCoords=[]; stopIndexes=[]; routePhase='none';
+ outboundDistanceKm=0; returnDistanceKm=0; totalTripDistanceKm=0;
+ syncSelectedBranchMarkers(); renderBranches(); fitAll(); renderTripSummary(); updateStatus();
+ await planRoute();
+ toast(tr('updated'));
+}
 function startSim(){if(!routeCoords.length||routePhase!=='outbound'){toast(lang==='ar'?'حدد مسار الذهاب أولًا.':'Plan the outbound route first.');return}if(tripStart){return}tripStart=new Date();tripArrivals=[];routeIndex=0;waitingForArrival=false;if(truckMarker)map.removeLayer(truckMarker);truckMarker=L.marker(routeCoords[0],{icon:truckIcon(),zIndexOffset:1500}).addTo(map);updateStatus();toast(tr('simStart'));stepVehicle()}
 function stepVehicle(){if(!truckMarker||routeIndex>=routeCoords.length-1||waitingForArrival)return;routeIndex++;truckMarker.setLatLng(routeCoords[routeIndex]);const next=routeOrder.find(x=>x.id!=='factory'&&!tripArrivals.some(a=>a.id===x.id));const stop=next?stopIndexes.find(s=>s.id===next.id):null;if(next&&stop&&routeIndex>=stop.index&&!arrivalPrompted){arrivalPrompted=true;waitingForArrival=true;showArrival(next);return}setTimeout(stepVehicle,80)}
 function distPoint(point,latlng){return dist(point,{lat:latlng[0],lng:latlng[1]})}
 function showArrival(branch){openModal(tr('confirm'),`${tr('arrive')} <b>${lang==='ar'?branch.nameAr:branch.nameEn}</b><br>${tr('arrivalAsk')}`,()=>{if(tripArrivals.some(a=>a.id===branch.id))return;tripArrivals.push({id:branch.id,time:new Date().toISOString()});arrivalPrompted=false;waitingForArrival=false;updateStatus();renderTripSummary();if(tripArrivals.length===routeOrder.filter(x=>x.id!=='factory').length){finishTrip();return}setTimeout(stepVehicle,100)})}
 function checkDone(){const needed=routeOrder.filter(x=>x.id!=='factory').length;if(tripArrivals.length===needed)setTimeout(()=>finishTrip(),300)}
-async function finishTrip(){if(!tripStart||routePhase!=='outbound')return;const last=routeOrder[routeOrder.length-1]||points.factory;try{const ret=await getRoute([last,points.factory]);returnDistanceKm=ret.distanceKm;totalTripDistanceKm=outboundDistanceKm+returnDistanceKm;returnLayer=L.geoJSON(ret.geometry,{style:{color:'#F58112',weight:6,opacity:.92,dashArray:'10 8'}}).addTo(map);routePhase='return';if(truckMarker)truckMarker.setLatLng([points.factory.lat,points.factory.lng]);map.fitBounds(L.featureGroup([routeLayer,returnLayer]).getBounds(),{padding:[40,40]});renderTripSummary();const end=new Date();const trip={date:end.toISOString(),start:tripStart.toISOString(),end:end.toISOString(),branches:routeOrder.filter(x=>x.id!=='factory').map(x=>x.id),arrivals:tripArrivals,distanceKm:totalTripDistanceKm,outboundDistanceKm,returnDistanceKm};const h=JSON.parse(localStorage.getItem('temar_trips')||'[]');h.unshift(trip);localStorage.setItem('temar_trips',JSON.stringify(h.slice(0,20)));renderHistory();updateStatus();toast(tr('done'));}catch(e){toast(tr('routingFail'))}}
+async function finishTrip(){
+ if(!tripStart||routePhase!=='outbound')return;
+ const session=tripSessionId;
+ const tripStartedAt=tripStart;
+ const last=routeOrder[routeOrder.length-1]||points.factory;
+ try{
+  const ret=await getRoute([last,points.factory]);
+  if(session!==tripSessionId||tripStart!==tripStartedAt||routePhase!=='outbound')return;
+  returnDistanceKm=ret.distanceKm;
+  totalTripDistanceKm=outboundDistanceKm+returnDistanceKm;
+  if(returnLayer)map.removeLayer(returnLayer);
+  returnLayer=L.geoJSON(ret.geometry,{style:{color:'#F58112',weight:6,opacity:.92,dashArray:'10 8'}}).addTo(map);
+  routePhase='return';
+  if(truckMarker)truckMarker.setLatLng([points.factory.lat,points.factory.lng]);
+  map.fitBounds(L.featureGroup([routeLayer,returnLayer]).getBounds(),{padding:[40,40]});
+  renderTripSummary();
+  const end=new Date();
+  const trip={date:end.toISOString(),start:tripStartedAt.toISOString(),end:end.toISOString(),branches:routeOrder.filter(x=>x.id!=='factory').map(x=>x.id),arrivals:tripArrivals,distanceKm:totalTripDistanceKm,outboundDistanceKm,returnDistanceKm};
+  const h=JSON.parse(localStorage.getItem('temar_trips')||'[]');
+  h.unshift(trip);localStorage.setItem('temar_trips',JSON.stringify(h.slice(0,20)));
+  renderHistory();updateStatus();toast(tr('done'));
+ }catch(e){
+  if(session===tripSessionId)toast(tr('routingFail'));
+ }
+}
 function renderHistory(){const el=document.getElementById('historyList'),h=JSON.parse(localStorage.getItem('temar_trips')||'[]');if(!h.length){el.innerHTML=`<div style="padding:18px 0;color:var(--muted)">${tr('noHistory')}</div>`;return}el.innerHTML=h.map((x,i)=>{const d=new Date(x.date);return `<div class="trip-card"><div><strong>${d.toLocaleDateString(lang==='ar'?'ar-EG':'en-GB',{weekday:'long',day:'numeric',month:'numeric',year:'numeric'})}</strong><small>${x.branches.length} ${tr('branches')} • ${Number(x.distanceKm).toFixed(1)} km</small></div><button class="btn secondary" data-view-trip="${i}"><i class="fa-solid fa-eye"></i></button></div>`}).join('');el.querySelectorAll('[data-view-trip]').forEach(b=>b.onclick=()=>viewTrip(Number(b.dataset.viewTrip)))}
 function viewTrip(i){const h=JSON.parse(localStorage.getItem('temar_trips')||'[]'),x=h[i];if(!x)return;const names=x.branches.map(id=>{const b=points.branches.find(b=>b.id===id);return b?(lang==='ar'?b.nameAr:b.nameEn):id}).join(' → ');openModal(tr('historyDetails'),`${names}<br><br>${tr('distance')}: ${Number(x.distanceKm).toFixed(1)} km<br>${tr('duration')}: ${Math.round((new Date(x.end)-new Date(x.start))/60000)} min`,null,{hideOk:true,okText:tr('close'),cancelText:tr('close')})}
 function openModal(title,text,ok,opts={}){const modal=document.getElementById('modal'),titleEl=document.getElementById('modalTitle'),textEl=document.getElementById('modalText'),okBtn=document.getElementById('modalOk'),cancelBtn=document.getElementById('modalCancel');titleEl.textContent=title;textEl.innerHTML=text||'';modal.style.display='flex';okBtn.style.display=opts.hideOk?'none':'inline-flex';okBtn.textContent=opts.okText||tr('confirm');cancelBtn.textContent=opts.cancelText||tr('cancel');cancelBtn.style.display='inline-flex';okBtn.onclick=null;cancelBtn.onclick=null;okBtn.onclick=()=>{modal.style.display='none';if(typeof ok==='function')ok()};cancelBtn.onclick=()=>{modal.style.display='none'}}

@@ -111,6 +111,14 @@ async function handleEditTrip(){
  // Keep the old route untouched until the user explicitly confirms the edit.
  confirmBranchEdit();
 }
+function handlePlanClick(){
+ if(editMode){
+  if(!selected.length){toast(tr('choose'));return}
+  confirmBranchEdit();
+  return;
+ }
+ planRoute();
+}
 function confirmBranchEdit(){
  const count=selected.length;
  const message=lang==='ar'
@@ -372,7 +380,7 @@ function onLocationError(err){stopLocationWatch();if(err&&err.code===1){toast(tr
 function stopLocationWatch(){if(locationWatchId!==null&&navigator.geolocation){navigator.geolocation.clearWatch(locationWatchId)}locationWatchId=null}
 function clearHistory(){openModal(tr('clear'),tr('clearConfirm'),()=>{localStorage.removeItem('temar_trips');renderHistory();toast(tr('historyClear'))})}
 function homeNavigation(){openModal(tr('confirmHome'),tr('homeWarn'),()=>{resetAll();const home=document.body.dataset.home||'../../index.html';window.location.href=new URL(home,window.location.href).href;});}
-document.getElementById('planBtn').onclick=planRoute;
+document.getElementById('planBtn').onclick=handlePlanClick;
 document.getElementById('resetBtn').onclick=resetAll;
 document.getElementById('tripSummary').onclick=e=>{
  const b=e.target.closest('#editTripBtn');

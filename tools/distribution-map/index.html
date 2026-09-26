@@ -67,7 +67,21 @@ function syncSelectedBranchMarkers(){if(!map)return;points.branches.forEach((b,i
 function fitAll(){const visible=points.branches.filter(b=>selected.includes(b.id));const ll=[L.latLng(points.factory.lat,points.factory.lng),...visible.map(b=>L.latLng(b.lat,b.lng))];map.fitBounds(L.latLngBounds(ll),{padding:[45,45],maxZoom:14})}
 function renderBranches(){const el=document.getElementById('branches');el.innerHTML='';const locked=!!routeOrder.length;points.branches.forEach(b=>{const checked=selected.includes(b.id);el.insertAdjacentHTML('beforeend',`<label class="branch"><input type="checkbox" data-id="${b.id}" ${checked?'checked':''} ${locked?'disabled':''}><span class="pin-mini"><i class="fa-solid fa-location-dot"></i></span><span><span class="branch-name">${lang==='ar'?b.nameAr:b.nameEn}</span></span></label>`);});el.querySelectorAll('input').forEach(x=>x.addEventListener('change',()=>{selected=[...el.querySelectorAll('input:checked')].map(i=>i.dataset.id);syncSelectedBranchMarkers();fitAll();updateStatus();}));}
 function updateStatus(){const el=document.getElementById('status');if(locationWatchId!==null){el.innerHTML=`<i class="fa-solid fa-location-dot"></i> ${tr('statusGps')}`;return}if(tripStart){el.innerHTML=lang==='ar'?`الرحلة قيد التشغيل — تم تأكيد <b>${tripArrivals.length}</b> من <b>${routeOrder.filter(x=>x.id!=='factory').length}</b> فروع.`:`Trip in progress — <b>${tripArrivals.length}</b> of <b>${routeOrder.filter(x=>x.id!=='factory').length}</b> branches confirmed.`;return}el.innerHTML=lang==='ar'?`تم اختيار <b>${selected.length}</b> من 3 فروع.`:`<b>${selected.length}</b> of 3 branches selected.`}
-function renderTripSummary(){const el=document.getElementById('tripSummary');if(!routeOrder.length){el.innerHTML='';return}const branches=routeOrder.filter(x=>x.id!=='factory');const d=(totalTripDistanceKm||0).toFixed(1);const locked=!!tripStart||routePhase==='return';el.innerHTML=`<div class="trip-summary"><div class="trip-summary-title">${tr('routeReady')}</div><div class="trip-stats"><div class="trip-stat"><strong>${branches.length}</strong><span>${tr('branchesCount')}</span></div><div class="trip-stat"><strong>${d} <small>${tr('km')}</small></strong><span>${tr('totalDistance')}</span></div></div><div class="route-state">${routePhase==='outbound'?tr('routeOutbound'):routePhase==='return'?tr('returnShown'):tr('statusPlanned')}</div><div class="actions" style="margin-top:10px"><button class="btn secondary" id="editTripBtn" ${locked?'disabled':''}><i class="fa-solid fa-pen-to-square"></i><span>${tr('edit')}</span></button></div><div id="editList" class="edit-list" style="display:none"><div class="meta">${tr('editHint')}</div>${branches.map(b=>`<div class="edit-row"><span>${lang==='ar'?b.nameAr:b.nameEn}</span><button type="button" class="remove-branch" data-remove="${b.id}" onclick="removeBranchFromTrip(\'${b.id}\')"><i class="fa-solid fa-xmark"></i> ${tr('remove')}</button></div>`).join('')}</div></div>`;const btn=document.getElementById('editTripBtn');if(btn&&!locked){btn.onclick=()=>{const l=document.getElementById('editList');l.style.display=l.style.display==='none'?'grid':'none';document.querySelectorAll('[data-remove]').forEach(x=>x.onclick=()=>removeBranchFromTrip(x.dataset.remove));}}}
+function renderTripSummary(){const el=document.getElementById('tripSummary');if(!routeOrder.length){el.innerHTML='';return}const branches=routeOrder.filter(x=>x.id!=='factory');const d=(totalTripDistanceKm||0).toFixed(1);const locked=!!tripStart||routePhase==='return';el.innerHTML=`<div class="trip-summary"><div class="trip-summary-title">${tr('routeReady')}</div><div class="trip-stats"><div class="trip-stat"><strong>${branches.length}</strong><span>${tr('branchesCount')}</span></div><div class="trip-stat"><strong>${d} <small>${tr('km')}</small></strong><span>${tr('totalDistance')}</span></div></div><div class="route-state">${routePhase==='outbound'?tr('routeOutbound'):routePhase==='return'?tr('returnShown'):tr('statusPlanned')}</div><div class="actions" style="margin-top:10px"><button class="btn secondary" id="editTripBtn" ${locked?'disabled':''}><i class="fa-solid fa-pen-to-square"></i><span>${tr('edit')}</span></button></div><div id="editList" class="edit-list" style="display:none"><div class="meta">${tr('editHint')}</div>${branches.map(b=>`<div class="edit-row"><span>${lang==='ar'?b.nameAr:b.nameEn}</span><button type="button" class="remove-branch" data-remove="${b.id}" onclick="removeBranchFromTrip(\'${b.id}\')"><i class="fa-solid fa-xmark"></i> ${tr('remove')}</button></div>`).join('')}</div></div>`;const btn=document.getElementById('editTripBtn');
+if(btn&&!locked){
+ btn.onclick=()=>{
+  const l=document.getElementById('editList');
+  l.style.display=l.style.display==='none'?'grid':'none';
+ };
+ const list=document.getElementById('editList');
+ if(list)list.onclick=(ev)=>{
+  const remove=ev.target.closest('.remove-branch');
+  if(!remove)return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  removeBranchFromTrip(remove.dataset.remove);
+ };
+}}
 const ROUTING_ENGINES=[
  'https://routing.openstreetmap.de/routed-car/route/v1/driving/',
  'https://router.project-osrm.org/route/v1/driving/'
@@ -76,6 +90,7 @@ async function fetchWithTimeout(url,ms=12000){const c=new AbortController();cons
 async function getRoute(coords){let lastErr=null;const path=coords.map(p=>encodeURIComponent(p.lng+','+p.lat)).join(';');for(const base of ROUTING_ENGINES){try{const d=await fetchWithTimeout(base+path+'?overview=full&geometries=geojson&steps=false');return {geometry:d.routes[0].geometry,distanceKm:d.routes[0].distance/1000,durationMin:d.routes[0].duration/60,engine:base.includes('openstreetmap.de')?'OSM Router':'OSRM Demo'};}catch(e){lastErr=e}}throw lastErr||new Error('routing')}
 function clearLayers(){if(routeLayer){map.removeLayer(routeLayer);routeLayer=null}if(returnLayer){map.removeLayer(returnLayer);returnLayer=null}if(truckMarker){map.removeLayer(truckMarker);truckMarker=null}}
 async function planRoute(){
+ const session=tripSessionId;
  if(tripStart){toast(tr('editLocked'));return}
  if(!selected.length){toast(tr('choose'));return}
  const btn=document.getElementById('planBtn');
@@ -112,6 +127,7 @@ async function planRoute(){
   // required calculations succeed, so a transient API/UI error cannot
   // remove a route that was already drawn.
   const out=await getRoute(order);
+  if(session!==tripSessionId)return;
   const nextRouteCoords=(out.geometry?.coordinates||[]).map(([lng,lat])=>[lat,lng]);
   if(!nextRouteCoords.length)throw new Error('Empty route geometry');
 
@@ -119,6 +135,7 @@ async function planRoute(){
   const last=order[order.length-1];
   try{
    const ret=await getRoute([last,points.factory]);
+   if(session!==tripSessionId)return;
    nextReturnDistance=ret.distanceKm;
   }catch(returnErr){
    nextReturnDistance=dist(last,points.factory);
@@ -144,6 +161,7 @@ async function planRoute(){
   }).addTo(map);
 
   // Commit the new route state atomically.
+  if(session!==tripSessionId){map.removeLayer(nextLayer);return;}
   if(previousRoute&&previousRoute!==nextLayer)map.removeLayer(previousRoute);
   if(previousReturn)map.removeLayer(previousReturn);
   routeLayer=nextLayer;
@@ -201,9 +219,10 @@ function resetAll(){
  toast(lang==='ar'?'تمت إعادة الضبط.':'Reset complete.');
 }
 async function removeBranchFromTrip(id){
- if(tripStart){toast(tr('editLocked'));return}
+ if(tripStart||routePhase==='return'){toast(tr('editLocked'));return}
+ tripSessionId++;
  const remaining=routeOrder.filter(x=>x.id==='factory'||x.id!==id);
- if(!remaining.filter(x=>x.id!=='factory').length){toast(tr('noBranchesAfterEdit'));return}
+ if(!remaining.filter(x=>x.id!=='factory').length){clearLayers();selected=[];routeOrder=[];routeCoords=[];stopIndexes=[];routePhase='none';outboundDistanceKm=0;returnDistanceKm=0;totalTripDistanceKm=0;syncSelectedBranchMarkers();renderBranches();fitAll();updateStatus();renderTripSummary();toast(tr('noBranchesAfterEdit'));return}
  selected=remaining.filter(x=>x.id!=='factory').map(x=>x.id);
  clearLayers();
  routeOrder=[]; routeCoords=[]; stopIndexes=[]; routePhase='none';

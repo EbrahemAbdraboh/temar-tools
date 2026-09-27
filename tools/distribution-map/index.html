@@ -401,6 +401,34 @@ function resetAll(){
  if(map)fitAll();
  toast(lang==='ar'?'تمت إعادة الضبط.':'Reset complete.');
 }
+async function reviseLiveRoute(nextSelected){
+ const ids=[...new Set(nextSelected)].filter(id=>points.branches.some(b=>b.id===id));
+ const done=new Set(tripArrivals.map(a=>a.id));
+ done.forEach(id=>{if(!ids.includes(id))ids.push(id)});
+ const pending=ids.map(id=>points.branches.find(b=>b.id===id)).filter(Boolean).filter(b=>!done.has(b.id));
+ if(!pending.length){toast(tr('choose'));return}
+ const pos=lastKnownPosition||(truckMarker?(()=>{const p=truckMarker.getLatLng();return {lat:p.lat,lng:p.lng}})():null);
+ if(!pos){toast(tr('routingFail'));return}
+ const session=tripSessionId,rev=tripRevision+1;
+ addTripEvent('ROUTE_REVISION_REQUESTED',{revision:rev});
+ try{
+  let from=pos,ordered=[],pool=[...pending];
+  while(pool.length){pool.sort((a,b)=>dist(from,a)-dist(from,b));const n=pool.shift();ordered.push(n);from=n}
+  const out=await getRoute([pos,...ordered]);
+  if(session!==tripSessionId)return;
+  const coords=(out.geometry.coordinates||[]).map(([lng,lat])=>[lat,lng]);
+  const layer=L.geoJSON(out.geometry,{style:{color:'#07305B',weight:6,opacity:.88}}).addTo(map);
+  if(routeLayer)map.removeLayer(routeLayer);
+  routeLayer=layer;routeGeometry=out.geometry;routeCoords=coords;routeIndex=0;
+  const stops=[];let cursor=0;
+  ordered.forEach(b=>{let best=cursor,bestD=Infinity;for(let i=cursor;i<coords.length;i++){const d=distPoint(b,coords[i]);if(d<bestD){bestD=d;best=i}}stops.push({id:b.id,index:best});cursor=best});
+  routeOrder=[points.factory,...tripArrivals.map(a=>points.branches.find(b=>b.id===a.id)).filter(Boolean),...ordered];
+  stopIndexes=stops;selected=ids;outboundDistanceKm=out.distanceKm;returnDistanceKm=0;totalTripDistanceKm=out.distanceKm;tripRevision=rev;editMode=false;
+  lastKnownPosition={lat:pos.lat,lng:pos.lng,source:'revision',timestamp:new Date().toISOString()};
+  addTripEvent('ROUTE_REVISION_APPLIED',{revision:rev});
+  renderBranches();renderTripSummary();updateStatus();updateSimulationControls();persistActiveTrip();toast(tr('updated'));
+ }catch(err){console.error(err);toast(tr('routingFail'))}
+}
 async function applyBranchEdit(nextSelected){
  if(tripStart||routePhase==='return'){toast(tr('editLocked'));return}
  const normalized=[...new Set(nextSelected)].filter(id=>points.branches.some(b=>b.id===id));

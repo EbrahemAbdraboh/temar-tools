@@ -462,24 +462,35 @@ async function finishTrip(reason='manual'){
  if(!tripStart||routePhase!=='outbound'||tripFinishing)return;
  tripFinishing=true;
  const session=tripSessionId,tripStartedAt=tripStart;
+ const branchRows=routeOrder.filter(x=>x.id!=='factory').map(x=>({id:x.id,delivered:tripArrivals.some(a=>a.id===x.id),arrivalTime:(tripArrivals.find(a=>a.id===x.id)||{}).time||null}));
+ const completed=branchRows.length>0&&branchRows.every(x=>x.delivered);
+ if(reason==='manual'&&!completed){
+  const endNow=new Date();
+  addTripEvent('TRIP_ENDED',{reason:'manual_early'});
+  const traveled=routeDistanceUntilIndex(routeIndex);
+  const trip={date:endNow.toISOString(),start:tripStartedAt.toISOString(),end:endNow.toISOString(),status:'ended_early',endReason:'manual_early',branches:branchRows,branchIds:branchRows.map(x=>x.id),arrivals:tripArrivals,distanceKm:traveled,outboundDistanceKm:traveled,returnDistanceKm:0,durationSec:Math.max(0,Math.round(simulatedElapsedSec))};
+  const h=JSON.parse(localStorage.getItem('temar_trips')||'[]');h.unshift(trip);localStorage.setItem('temar_trips',JSON.stringify(h.slice(0,20)));
+  renderHistory();tripStart=null;simulationActive=false;if(simTimer){clearInterval(simTimer);simTimer=null}
+  tripFinishing=false;clearActiveTrip();updateStatus();renderTripSummary();renderTimeline();updateTripActionButton();updateSimulationControls();toast(tr('endedEarly'));return;
+ }
  const p=routeCoords[Math.min(routeIndex,Math.max(0,routeCoords.length-1))]||[points.factory.lat,points.factory.lng];
- const last={lat:p[0],lng:p[1]};
  try{
-  const ret=await getRoute([last,points.factory]);
+  const ret=await getRoute([{lat:p[0],lng:p[1]},points.factory]);
   if(session!==tripSessionId||tripStart!==tripStartedAt||routePhase!=='outbound'){tripFinishing=false;return}
-  outboundDistanceKm=routeDistanceUntilIndex(routeIndex);
-  returnDistanceKm=ret.distanceKm;totalTripDistanceKm=outboundDistanceKm+returnDistanceKm;
+  outboundDistanceKm=routeDistanceUntilIndex(routeIndex);returnDistanceKm=ret.distanceKm;totalTripDistanceKm=outboundDistanceKm+returnDistanceKm;
   if(returnLayer)map.removeLayer(returnLayer);
   returnLayer=L.geoJSON(ret.geometry,{style:{color:'#F58112',weight:6,opacity:.92,dashArray:'10 8'}}).addTo(routeOverlayGroup);
-  returnGeometry=ret.geometry;routePhase='return';if(!tripEvents.some(e=>e.type==='RETURN_STARTED'))addTripEvent('RETURN_STARTED');
+  returnGeometry=ret.geometry;routePhase='return';
+  if(!tripEvents.some(e=>e.type==='RETURN_STARTED'))addTripEvent('RETURN_STARTED');
   if(truckMarker)truckMarker.setLatLng([points.factory.lat,points.factory.lng]);
   map.fitBounds(L.featureGroup([routeLayer,returnLayer]).getBounds(),{padding:[40,40]});
-  const end=new Date(),doneIds=new Set(tripArrivals.map(a=>a.id));if(!tripEvents.some(e=>e.type==='FACTORY_REACHED'))addTripEvent('FACTORY_REACHED');if(!tripEvents.some(e=>e.type==='TRIP_ENDED'))addTripEvent('TRIP_ENDED');
-  const branches=routeOrder.filter(x=>x.id!=='factory').map(x=>({id:x.id,delivered:doneIds.has(x.id),arrivalTime:(tripArrivals.find(a=>a.id===x.id)||{}).time||null}));
-  const completed=branches.every(x=>x.delivered);
-  const trip={date:end.toISOString(),start:tripStartedAt.toISOString(),end:end.toISOString(),status:completed?'completed':'ended_early',endReason:reason,branches,branchIds:branches.map(x=>x.id),arrivals:tripArrivals,distanceKm:totalTripDistanceKm,outboundDistanceKm,returnDistanceKm,durationSec:tripEvents.length?Math.max(0,Math.round(simulatedElapsedSec)):Math.max(0,Math.round((end-tripStartedAt)/1000))};
+  const endNow=new Date();
+  if(!tripEvents.some(e=>e.type==='FACTORY_REACHED'))addTripEvent('FACTORY_REACHED');
+  if(!tripEvents.some(e=>e.type==='TRIP_ENDED'))addTripEvent('TRIP_ENDED');
+  const trip={date:endNow.toISOString(),start:tripStartedAt.toISOString(),end:endNow.toISOString(),status:'completed',endReason:reason,branches:branchRows,branchIds:branchRows.map(x=>x.id),arrivals:tripArrivals,distanceKm:totalTripDistanceKm,outboundDistanceKm,returnDistanceKm,durationSec:Math.max(0,Math.round(simulatedElapsedSec))};
   const h=JSON.parse(localStorage.getItem('temar_trips')||'[]');h.unshift(trip);localStorage.setItem('temar_trips',JSON.stringify(h.slice(0,20)));
-  renderHistory();tripStart=null;simulationActive=false;if(simTimer){clearInterval(simTimer);simTimer=null}updateStatus();renderTripSummary();renderTimeline();tripFinishing=false;updateTripActionButton();updateSimulationControls();clearActiveTrip();toast(completed?tr('done'):tr('endedEarly'));
+  renderHistory();tripStart=null;simulationActive=false;if(simTimer){clearInterval(simTimer);simTimer=null}
+  updateStatus();renderTripSummary();renderTimeline();tripFinishing=false;updateTripActionButton();updateSimulationControls();clearActiveTrip();toast(tr('done'));
  }catch(e){tripFinishing=false;if(session===tripSessionId)toast(tr('routingFail'))}
 }
 function formatDuration(sec){sec=Math.max(0,Number(sec)||0);const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;return h?(h+' '+tr('hours')+' '+m+' '+tr('minutes')):(m+' '+tr('minutes')+' '+s+' '+tr('seconds'))}

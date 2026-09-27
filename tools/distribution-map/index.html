@@ -97,38 +97,45 @@ function timelineLabel(type){return ({TRIP_STARTED:tr('tripStartedEvent'),ARRIVE
 function addTripEvent(type,payload={}){const realTime=new Date().toISOString(),simulatedTime=tripStart?new Date(new Date(tripStart).getTime()+simulatedElapsedSec*1000).toISOString():realTime;tripEvents.push({type,time:realTime,simulatedTime,payload});renderTimeline();persistActiveTrip()}
 function renderTimeline(){const el=document.getElementById('timeline');if(!el)return;if(!tripEvents.length){el.innerHTML='';return}const start=tripStart?new Date(tripStart):new Date();const rows=tripEvents.slice().reverse().map(e=>{const b=e.payload?.branchId?points.branches.find(x=>x.id===e.payload.branchId):null;const name=b?(lang==='ar'?b.nameAr:b.nameEn):'';const sim=new Date(e.simulatedTime||e.time);const rel=Math.max(0,(sim-start)/1000);return `<div class="timeline-item"><div class="timeline-time">${formatClock(rel)}</div><div class="timeline-text"><b>${timelineLabel(e.type)}</b>${name?' — '+name:''}</div></div>`}).join('');el.innerHTML=`<div class="timeline"><div class="timeline-head"><strong><i class="fa-solid fa-timeline"></i> ${tr('timeline')}</strong><span class="timeline-clock">${tr('simTime')}: ${formatClock(simulatedElapsedSec)}</span></div><div class="timeline-list">${rows}</div></div>`}
 function updateStatus(){const el=document.getElementById('status');if(locationWatchId!==null){el.innerHTML=`<i class="fa-solid fa-location-dot"></i> ${tr('statusGps')}`;return}if(tripStart){el.innerHTML=lang==='ar'?`الرحلة قيد التشغيل — تم تأكيد <b>${tripArrivals.length}</b> من <b>${routeOrder.filter(x=>x.id!=='factory').length}</b> فروع.`:`Trip in progress — <b>${tripArrivals.length}</b> of <b>${routeOrder.filter(x=>x.id!=='factory').length}</b> branches confirmed.`;return}el.innerHTML=lang==='ar'?`تم اختيار <b>${selected.length}</b> من 3 فروع.`:`<b>${selected.length}</b> of 3 branches selected.`}
+function updateRoleControl(){
+ const b=document.getElementById('roleToggleBtn'),badge=document.getElementById('roleBadge');if(!b)return;
+ const supervisor=testRole==='supervisor';
+ if(badge)badge.textContent=tr(supervisor?'supervisorMode':'driverMode');
+ const icon=b.querySelector('i'),label=b.querySelector('span');
+ if(icon)icon.className=supervisor?'fa-solid fa-user-tie':'fa-solid fa-id-badge';
+ if(label)label.textContent=tr(supervisor?'switchDriver':'switchSupervisor');
+ b.classList.toggle('orange',supervisor);b.classList.toggle('secondary',!supervisor);
+}
+function toggleTestRole(){
+ testRole=testRole==='driver'?'supervisor':'driver';
+ if(testRole==='driver'&&editMode){editMode=false;selected=[...editSelectionSnapshot];}
+ updateRoleControl();renderBranches();renderTripSummary();toast(tr(testRole==='supervisor'?'supervisorMode':'driverMode'));
+}
 function renderTripSummary(){
  const el=document.getElementById('tripSummary');
  if(!routeOrder.length){el.innerHTML='';editMode=false;renderBranches();return}
  const branches=routeOrder.filter(x=>x.id!=='factory');
  const d=(totalTripDistanceKm||0).toFixed(1);
- const locked=!!tripStart||routePhase==='return';
  const editAvailable=routePhase==='outbound';
- el.innerHTML=`<div class="trip-summary"><div class="trip-summary-title">${tr('routeReady')}</div><div class="trip-stats"><div class="trip-stat"><strong>${branches.length}</strong><span>${tr('branchesCount')}</span></div><div class="trip-stat"><strong>${d} <small>${tr('km')}</small></strong><span>${tr('totalDistance')}</span></div></div><div class="route-state">${routePhase==='outbound'?tr('routeOutbound'):routePhase==='return'?tr('returnShown'):tr('statusPlanned')}</div>${editAvailable?`<div class="actions" style="margin-top:10px"><button type="button" class="btn secondary" id="editTripBtn" ${locked?'disabled title="'+tr('editLocked')+'"':''}><i class="fa-solid ${editMode?'fa-check':'fa-pen-to-square'}"></i><span>${editMode?tr('applyEdit'):tr('edit')}</span></button></div>`:''}</div>`;
+ const blocked=!!tripStart&&testRole!=='supervisor';
+ el.innerHTML=`<div class="trip-summary"><div class="trip-summary-title">${tr('routeReady')}</div><div class="trip-stats"><div class="trip-stat"><strong>${branches.length}</strong><span>${tr('branchesCount')}</span></div><div class="trip-stat"><strong>${d} <small>${tr('km')}</small></strong><span>${tr('totalDistance')}</span></div></div><div class="route-state">${routePhase==='outbound'?tr('routeOutbound'):routePhase==='return'?tr('returnShown'):tr('statusPlanned')}</div>${editAvailable?`<div class="actions" style="margin-top:10px"><button type="button" class="btn secondary" id="editTripBtn" ${blocked?'disabled':''} title="${blocked?tr('supervisorOnly'):''}"><i class="fa-solid ${editMode?'fa-check':'fa-pen-to-square'}"></i><span>${editMode?tr('applyEdit'):tr('edit')}</span></button></div>`:''}</div>`;
  const btn=document.getElementById('editTripBtn');
- if(btn&&!locked) btn.onclick=handleEditTrip;
+ if(btn&&!blocked)btn.onclick=handleEditTrip;
 }
 async function handleEditTrip(){
- const btn=document.getElementById('editTripBtn');
- if(!btn)return;
- if(tripStart||routePhase==='return'){toast(tr('editLocked'));return}
+ const btn=document.getElementById('editTripBtn');if(!btn)return;
+ if(tripStart&&testRole!=='supervisor'){toast(tr('supervisorOnly'));return}
+ if(routePhase==='return'){toast(tr('editLocked'));return}
  if(!editMode){
-  editMode=true;
-  renderBranches();
-  // Do not rebuild tripSummary here. Replacing the clicked button during
-  // its own click event can cause the confirmation action to fire immediately.
-  const icon=btn.querySelector('i');
-  const label=btn.querySelector('span');
+  editSelectionSnapshot=[...selected];editMode=true;renderBranches();
+  const icon=btn.querySelector('i'),label=btn.querySelector('span');
   if(icon)icon.className='fa-solid fa-check';
   if(label)label.textContent=tr('applyEdit');
-  btn.classList.remove('secondary');
-  btn.classList.add('orange');
-  updateStatus();
-  toast(tr('editHint'));
-  return;
+  btn.classList.remove('secondary');btn.classList.add('orange');
+  updateStatus();toast(tr('routeRevisionHint'));return;
  }
  if(!selected.length){toast(tr('choose'));return}
- await applyBranchEdit([...selected]);
+ if(tripStart)await reviseLiveRoute([...selected]);else await applyBranchEdit([...selected]);
 }
 function handlePlanClick(){
  const planBtn=document.getElementById('planBtn');

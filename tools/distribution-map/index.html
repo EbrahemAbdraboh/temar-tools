@@ -66,30 +66,23 @@ function initMap(){map=L.map('map',{zoomControl:false}).setView([points.factory.
 function syncSelectedBranchMarkers(){if(!map)return;points.branches.forEach((b,i)=>{const shouldShow=selected.includes(b.id);if(shouldShow&&!markers[b.id]){markers[b.id]=L.marker([b.lat,b.lng],{icon:branchIcon(i),zIndexOffset:500}).addTo(map).bindPopup(`<div class="popup-title">${b.nameAr}</div><div class="popup-meta">${lang==='ar'?'فرع مختار للرحلة':'Selected trip branch'}</div>`);}else if(!shouldShow&&markers[b.id]){map.removeLayer(markers[b.id]);delete markers[b.id];}})}
 function fitAll(){const visible=points.branches.filter(b=>selected.includes(b.id));const ll=[L.latLng(points.factory.lat,points.factory.lng),...visible.map(b=>L.latLng(b.lat,b.lng))];map.fitBounds(L.latLngBounds(ll),{padding:[45,45],maxZoom:14})}
 function renderBranches(){
- const el=document.getElementById('branches');
- el.innerHTML='';
- const locked=!!tripStart||routePhase==='return';
- const routeLocked=!!routeOrder.length&&!editMode;
+ const el=document.getElementById('branches');el.innerHTML='';
+ const deliveredIds=new Set(tripArrivals.map(a=>a.id));
  points.branches.forEach(b=>{
-  const checked=selected.includes(b.id);
+  const checked=selected.includes(b.id),isDelivered=deliveredIds.has(b.id);
+  const disabled=routePhase==='return'||(tripStart&&!editMode)||(editMode&&isDelivered);
+  const meta=b.testOnly?tr('testBranchHint'):(editMode?(lang==='ar'?'اضغط لإضافة أو إزالة الفرع':'Tap to add or remove'):'');
   el.insertAdjacentHTML('beforeend',`<label class="branch ${editMode?'editing':''}">
-   <input type="checkbox" data-id="${b.id}" ${checked?'checked':''} ${(locked||routeLocked)?'disabled':''}>
+   <input type="checkbox" data-id="${b.id}" ${checked?'checked':''} ${disabled?'disabled':''}>
    <span class="pin-mini"><i class="fa-solid fa-location-dot"></i></span>
-   <span><span class="branch-name">${lang==='ar'?b.nameAr:b.nameEn}</span><span class="meta">${editMode&&!locked?(lang==='ar'?'اضغط لإضافة أو إزالة الفرع':'Tap to add or remove'):''}</span></span>
+   <span><span class="branch-name">${lang==='ar'?b.nameAr:b.nameEn}</span><span class="meta">${meta}</span></span>
   </label>`);
  });
  el.querySelectorAll('input').forEach(x=>x.addEventListener('change',()=>{
-  if(!editMode && routeOrder.length){x.checked=selected.includes(x.dataset.id);return}
-  const nextSelected=[...el.querySelectorAll('input:checked')].map(i=>i.dataset.id);
-  if(!nextSelected.length){
-   x.checked=true;
-   toast(lang==='ar'?'يجب الإبقاء على فرع واحد على الأقل.':'At least one branch must remain selected.');
-   return;
-  }
-  selected=nextSelected;
-  const planBtn=document.getElementById('planBtn');
-  if(planBtn&&!routeOrder.length&&!editMode)planBtn.disabled=selected.length===0;
-  syncSelectedBranchMarkers();fitAll();updateStatus();
+  const next=[...el.querySelectorAll('input:checked')].map(i=>i.dataset.id);
+  tripArrivals.forEach(a=>{if(!next.includes(a.id))next.push(a.id)});
+  if(!next.length){x.checked=true;toast(tr('noBranchesAfterEdit'));return}
+  selected=[...new Set(next)];syncSelectedBranchMarkers();fitAll();updateStatus();
  }));
 }
 function formatClock(sec){sec=Math.max(0,Math.floor(Number(sec)||0));const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;return [h,m,s].map(v=>String(v).padStart(2,'0')).join(':')}
